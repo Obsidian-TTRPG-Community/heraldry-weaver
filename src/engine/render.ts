@@ -1,0 +1,353 @@
+import { shieldPath, SHIELD_W, SHIELD_H } from './shields';
+import { hexOf, furInfo } from './tinctures';
+import type { FurInfo } from './tinctures';
+import { getCharge } from './charges';
+import { positionOf } from './options';
+import type {
+  Spec,
+  Field,
+  Ordinary,
+  ChargeGroup,
+  Arrangement,
+  Tincture,
+  Position,
+} from './types';
+
+export interface RenderOptions {
+  /** Unique id suffix so multiple shields can coexist on one page. */
+  uid?: string | number;
+  /** Outline colour. */
+  outline?: string;
+}
+
+let counter = 0;
+function n(v: number): string {
+  return Number(v.toFixed(3)).toString();
+}
+
+/** Make a uid safe to embed in an SVG id / url(#...) reference. */
+function safeId(uid: string | number): string {
+  return String(uid).replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
+// --- furs (pattern fills) -----------------------------------------------------
+
+interface Defs {
+  uid: string;
+  patterns: Map<string, string>; // id -> markup
+}
+
+/** An ermine spot, centred on its local origin. */
+function ermineSpot(): string {
+  return (
+    `<path d="M0 7 C -7 -1 -7 -11 0 -15 C 7 -11 7 -1 0 7 Z"/>` +
+    `<circle cx="0" cy="-18" r="2.1"/>` +
+    `<circle cx="-5" cy="-13" r="2.1"/>` +
+    `<circle cx="5" cy="-13" r="2.1"/>`
+  );
+}
+
+const BELL_DOWN = 'M0 0 C6 16 14 20 20 20 C26 20 34 16 40 0 Z';
+const BELL_UP = 'M0 40 C6 24 14 20 20 20 C26 20 34 24 40 40 Z';
+const POTENT_DOWN = 'M0 0 H40 V6 H23 V20 H17 V6 H0 Z';
+const POTENT_UP = 'M0 40 H40 V34 H23 V20 H17 V34 H0 Z';
+
+/** Inner markup (rect + figures) for a fur tile, given its colours. */
+function furTile(info: FurInfo): { w: number; h: number; body: string } {
+  const base = hexOf(info.base);
+  const fig = hexOf(info.figure);
+  if (info.pattern === 'ermine') {
+    return {
+      w: 44, h: 56,
+      body:
+        `<rect width="44" height="56" fill="${base}"/>` +
+        `<g fill="${fig}"><g transform="translate(11,18)">${ermineSpot()}</g>` +
+        `<g transform="translate(33,46)">${ermineSpot()}</g></g>`,
+    };
+  }
+  // vair / potent share the same offset-row layout; only the figure differs.
+  const down = info.pattern === 'vair' ? BELL_DOWN : POTENT_DOWN;
+  const up = info.pattern === 'vair' ? BELL_UP : POTENT_UP;
+  const second = info.counter ? up : down;
+  return {
+    w: 40, h: 40,
+    body:
+      `<rect width="40" height="40" fill="${base}"/>` +
+      `<g fill="${fig}"><path d="${down}"/>` +
+      `<g transform="translate(-20,20)"><path d="${second}"/></g>` +
+      `<g transform="translate(20,20)"><path d="${second}"/></g></g>`,
+  };
+}
+
+/** A small standalone fur tile for UI swatches (no <defs>/pattern needed). */
+export function furSwatchSvg(t: Tincture): string {
+  const info = furInfo(t);
+  if (!info) return '';
+  const { w, h, body } = furTile(info);
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">` +
+    `${body}</svg>`
+  );
+}
+
+function furPattern(info: FurInfo, id: string): string {
+  const { w, h, body } = furTile(info);
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${w}" height="${h}">${body}</pattern>`;
+}
+
+/** Resolve a FIELD tincture to a fill, registering a pattern def for furs. */
+function paint(t: Tincture, defs: Defs): string {
+  const info = furInfo(t);
+  if (!info) return hexOf(t);
+  const key = `${info.pattern}-${info.base}-${info.figure}${info.counter ? '-c' : ''}`;
+  const id = `hw-fur-${key}-${defs.uid}`;
+  if (!defs.patterns.has(id)) defs.patterns.set(id, furPattern(info, id));
+  return `url(#${id})`;
+}
+
+// --- field regions -----------------------------------------------------------
+
+function divisionRegions(field: Field, defs: Defs): string {
+  const a = paint(field.tinctures[0], defs);
+  const b = paint(field.tinctures[1] ?? field.tinctures[0], defs);
+  switch (field.division) {
+    case 'per-pale':
+      return (
+        `<rect x="0" y="0" width="100" height="230" fill="${a}"/>` +
+        `<rect x="100" y="0" width="100" height="230" fill="${b}"/>`
+      );
+    case 'per-fess':
+      return (
+        `<rect x="0" y="0" width="200" height="115" fill="${a}"/>` +
+        `<rect x="0" y="115" width="200" height="115" fill="${b}"/>`
+      );
+    case 'per-bend':
+      return (
+        `<path d="M0 -8.75 L200 238.75 L200 -20 L0 -20 Z" fill="${a}"/>` +
+        `<path d="M0 -8.75 L200 238.75 L200 250 L0 250 Z" fill="${b}"/>`
+      );
+    case 'per-chevron':
+      return (
+        `<rect x="0" y="0" width="200" height="230" fill="${a}"/>` +
+        `<path d="M0 230 L100 120 L200 230 L200 252 L0 252 Z" fill="${b}"/>`
+      );
+    case 'per-saltire':
+      return (
+        `<rect x="0" y="0" width="200" height="230" fill="${b}"/>` +
+        `<path d="M0 0 L200 0 L100 115 Z" fill="${a}"/>` +
+        `<path d="M0 230 L200 230 L100 115 Z" fill="${a}"/>`
+      );
+    case 'quarterly':
+      return (
+        `<rect x="0" y="0" width="200" height="230" fill="${b}"/>` +
+        `<rect x="0" y="0" width="100" height="115" fill="${a}"/>` +
+        `<rect x="100" y="115" width="100" height="115" fill="${a}"/>`
+      );
+    default:
+      return `<rect x="0" y="0" width="200" height="230" fill="${a}"/>`;
+  }
+}
+
+function variationRegions(field: Field, defs: Defs): string {
+  const a = paint(field.tinctures[0], defs);
+  const b = paint(field.tinctures[1] ?? field.tinctures[0], defs);
+  let out = `<rect x="0" y="0" width="200" height="230" fill="${b}"/>`;
+  if (field.variation === 'barry') {
+    const bars = 6;
+    const h = 230 / bars;
+    for (let i = 0; i < bars; i++) {
+      if (i % 2 === 0) {
+        out += `<rect x="0" y="${n(i * h)}" width="200" height="${n(h + 0.5)}" fill="${a}"/>`;
+      }
+    }
+  } else if (field.variation === 'paly') {
+    const pales = 6;
+    const w = 200 / pales;
+    for (let i = 0; i < pales; i++) {
+      if (i % 2 === 0) {
+        out += `<rect x="${n(i * w)}" y="0" width="${n(w + 0.5)}" height="230" fill="${a}"/>`;
+      }
+    }
+  } else {
+    // checky
+    const cols = 5;
+    const rows = 6;
+    const w = 200 / cols;
+    const h = 230 / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if ((r + c) % 2 === 0) {
+          out += `<rect x="${n(c * w)}" y="${n(r * h)}" width="${n(w + 0.5)}" height="${n(h + 0.5)}" fill="${a}"/>`;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function fieldMarkup(field: Field, defs: Defs): string {
+  if (field.mode === 'plain') {
+    return `<rect x="0" y="0" width="200" height="230" fill="${paint(field.tinctures[0], defs)}"/>`;
+  }
+  if (field.mode === 'division') return divisionRegions(field, defs);
+  return variationRegions(field, defs);
+}
+
+// --- ordinaries ---------------------------------------------------------------
+
+function ordinaryMarkup(o: Ordinary): string {
+  const f = hexOf(o.tincture);
+  switch (o.type) {
+    case 'chief':
+      return `<rect x="0" y="16" width="200" height="42" fill="${f}"/>`;
+    case 'pale':
+      return `<rect x="77" y="0" width="46" height="230" fill="${f}"/>`;
+    case 'fess':
+      return `<rect x="0" y="92" width="200" height="46" fill="${f}"/>`;
+    case 'bend':
+      return `<polygon points="-16.33,4.45 16.33,-21.95 216.33,225.55 183.67,251.95" fill="${f}"/>`;
+    case 'bend-sinister':
+      return `<polygon points="16.34,251.95 -16.34,225.55 183.66,-21.95 216.34,4.45" fill="${f}"/>`;
+    case 'chevron':
+      return `<polyline points="20,200 100,95 180,200" fill="none" stroke="${f}" stroke-width="34" stroke-linejoin="miter"/>`;
+    case 'cross':
+      return (
+        `<rect x="78" y="0" width="44" height="230" fill="${f}"/>` +
+        `<rect x="0" y="93" width="200" height="44" fill="${f}"/>`
+      );
+    case 'saltire':
+      return (
+        `<line x1="20" y1="16" x2="180" y2="214" stroke="${f}" stroke-width="30"/>` +
+        `<line x1="180" y1="16" x2="20" y2="214" stroke="${f}" stroke-width="30"/>`
+      );
+    case 'pile':
+      return `<polygon points="20,16 180,16 100,180" fill="${f}"/>`;
+    default:
+      return '';
+  }
+}
+
+// --- charges ------------------------------------------------------------------
+
+interface Pos {
+  x: number;
+  y: number;
+  size: number;
+}
+
+/** Anchor centre for each of the 9 placement positions. */
+const ANCHORS: Record<Position, { x: number; y: number }> = {
+  'top-left': { x: 62, y: 50 },
+  top: { x: 100, y: 46 },
+  'top-right': { x: 138, y: 50 },
+  left: { x: 56, y: 116 },
+  center: { x: 100, y: 118 },
+  right: { x: 144, y: 116 },
+  'bottom-left': { x: 64, y: 172 },
+  bottom: { x: 100, y: 184 },
+  'bottom-right': { x: 136, y: 172 },
+};
+
+/** A small row of up to 3 charges centred on (cx, cy). */
+function rowAround(cx: number, cy: number, count: number, size: number): Pos[] {
+  if (count <= 1) return [{ x: cx, y: cy, size }];
+  if (count === 2) {
+    const s = size - 4;
+    return [
+      { x: cx - 22, y: cy, size: s },
+      { x: cx + 22, y: cy, size: s },
+    ];
+  }
+  const s = size - 10;
+  return [
+    { x: cx - 30, y: cy, size: s },
+    { x: cx, y: cy, size: s },
+    { x: cx + 30, y: cy, size: s },
+  ];
+}
+
+function chargePositions(count: number, arrangement: Arrangement, position: Position): Pos[] {
+  if (position === 'center') {
+    // Centre keeps the richer field layouts (single, fess, pale, two-and-one).
+    if (count === 1 || arrangement === 'one') return [{ x: 100, y: 118, size: 78 }];
+    if (arrangement === 'in-pale')
+      return [
+        { x: 100, y: 78, size: 58 },
+        { x: 100, y: 150, size: 58 },
+      ];
+    if (arrangement === 'in-fess')
+      return [
+        { x: 66, y: 112, size: 62 },
+        { x: 134, y: 112, size: 62 },
+      ];
+    // two-and-one
+    return [
+      { x: 66, y: 74, size: 54 },
+      { x: 134, y: 74, size: 54 },
+      { x: 100, y: 150, size: 54 },
+    ];
+  }
+  const a = ANCHORS[position];
+  return rowAround(a.x, a.y, count, 48);
+}
+
+function chargeGroupMarkup(g: ChargeGroup): string {
+  const def = getCharge(g.charge);
+  if (!def) return '';
+  const fill = hexOf(g.tincture);
+  const inner = def.render(fill);
+  const mult = g.scale && g.scale > 0 ? g.scale : 1;
+  const positions = chargePositions(g.count, g.arrangement, positionOf(g));
+  return positions
+    .slice(0, g.count)
+    .map((p) => {
+      const scale = (p.size * mult) / 100;
+      if (!g.flipX && !g.flipY) {
+        const tx = p.x - 50 * scale;
+        const ty = p.y - 50 * scale;
+        return `<g transform="translate(${n(tx)},${n(ty)}) scale(${n(scale)})">${inner}</g>`;
+      }
+      // Mirror about the charge centre by negating the axis scale and shifting
+      // the origin to the opposite edge, so the centre stays put.
+      const sx = (g.flipX ? -1 : 1) * scale;
+      const sy = (g.flipY ? -1 : 1) * scale;
+      const tx = p.x - 50 * sx;
+      const ty = p.y - 50 * sy;
+      return `<g transform="translate(${n(tx)},${n(ty)}) scale(${n(sx)},${n(sy)})">${inner}</g>`;
+    })
+    .join('');
+}
+
+// --- top-level ----------------------------------------------------------------
+
+/** Render a spec to a standalone, self-contained SVG string. */
+export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
+  const outline = opts.outline ?? '#20201e';
+  // Append a process-global counter so two shields that share a uid (e.g. the
+  // same note-title key rendered as both an inline and a block, or the same
+  // note open in two panes) never collide on clipPath / pattern ids — an
+  // SVG url(#id) reference resolves to the first match in the document, so a
+  // collision would make one shield borrow another's clip or fill.
+  const safe = `${safeId(opts.uid ?? 'hw')}-${counter++}`;
+  const clipId = `hw-clip-${safe}`;
+  const path = shieldPath(spec.shield);
+  const defs: Defs = { uid: safe, patterns: new Map() };
+
+  const clipped = fieldMarkup(spec.field, defs) +
+    (spec.ordinary ? ordinaryMarkup(spec.ordinary) : '');
+
+  // Charges are sized to sit inside the field, so they are not clipped (keeps
+  // their outlines crisp at the shield edge).
+  const charges = spec.charges.map(chargeGroupMarkup).join('');
+
+  const patternDefs = [...defs.patterns.values()].join('');
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHIELD_W} ${SHIELD_H}" role="img">` +
+    `<defs><clipPath id="${clipId}"><path d="${path}"/></clipPath>${patternDefs}</defs>` +
+    `<g clip-path="url(#${clipId})">${clipped}</g>` +
+    charges +
+    `<path d="${path}" fill="none" stroke="${outline}" stroke-width="2"/>` +
+    `</svg>`
+  );
+}

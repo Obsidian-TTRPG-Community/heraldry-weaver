@@ -1,0 +1,22 @@
+{
+  "name": "heraldry-weaver",
+  "version": "1.0.0",
+  "description": "Procedural and custom heraldry generation for Obsidian (engine + playground).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "playground": "node scripts/build-playground.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "builtin-modules": "^5.2.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.13.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

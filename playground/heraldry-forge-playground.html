@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heraldry Forge — Playground</title>
+<style>
+  :root { --bg:#1c1b18; --panel:#26241f; --line:#3a382f; --ink:#ece7d8; --muted:#a39e8c; --accent:#c9a44c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  h1 { font-size:20px; font-weight:600; margin:0; letter-spacing:.3px; }
+  header .sub { color:var(--muted); font-size:13px; }
+  .controls { padding:16px 24px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+  input[type=text] { background:var(--panel); border:1px solid var(--line); color:var(--ink); padding:8px 11px; border-radius:8px; font-size:14px; min-width:220px; }
+  button { background:var(--panel); border:1px solid var(--line); color:var(--ink); padding:8px 14px; border-radius:8px; font-size:14px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#1c1b18; border-color:var(--accent); font-weight:600; }
+  .tabs { display:flex; gap:6px; margin-left:auto; }
+  .tabs button.active { border-color:var(--accent); color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; padding:24px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 12px 12px; text-align:center; cursor:pointer; transition:border-color .15s; }
+  .card:hover { border-color:var(--accent); }
+  .card svg { width:96px; height:auto; display:block; margin:0 auto 10px; }
+  .card .name { font-size:14px; font-weight:600; }
+  .card .blazon { font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.45; font-style:italic; }
+  .inline-demo { padding:0 24px 28px; }
+  .infobox { display:inline-block; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px 0; }
+  .infobox table { border-collapse:collapse; font-size:13px; }
+  .infobox td { padding:7px 14px; border-bottom:1px solid var(--line); }
+  .infobox tr:last-child td { border-bottom:none; }
+  .infobox td:first-child { color:var(--muted); }
+  .infobox svg { height:1.1em; width:auto; vertical-align:-0.18em; }
+  h2 { font-size:14px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; padding:0 24px; margin:6px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚜ Heraldry Forge</h1>
+  <span class="sub">engine playground — v0.1.0-alpha.1 (Tier 0, self-drawn)</span>
+</header>
+<div class="controls">
+  <input id="seed" type="text" placeholder="Type a name or seed… e.g. House Aldori">
+  <button class="primary" id="render">Render</button>
+  <button id="reroll">Random batch</button>
+  <div class="tabs" id="tabs"></div>
+</div>
+<div class="grid" id="grid"></div>
+
+<h2>Inline demo — shields inside a markdown-style infobox</h2>
+<div class="inline-demo">
+  <div class="infobox"><table id="infobox"></table></div>
+</div>
+
+<script>"use strict";
+var HF = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // src/engine/index.ts
+  var engine_exports = {};
+  __export(engine_exports, {
+    CHARGES: () => CHARGES,
+    CHARGE_IDS: () => CHARGE_IDS,
+    COLOURS: () => COLOURS,
+    FURS: () => FURS,
+    GENERATABLE: () => GENERATABLE,
+    METALS: () => METALS,
+    RNG: () => RNG,
+    TINCTURE_HEX: () => TINCTURE_HEX,
+    TINCTURE_LABEL: () => TINCTURE_LABEL,
+    contrasts: () => contrasts,
+    generate: () => generate,
+    generateArms: () => generateArms,
+    getCharge: () => getCharge,
+    hexOf: () => hexOf,
+    labelOf: () => labelOf,
+    renderSvg: () => renderSvg,
+    tinctureClass: () => tinctureClass,
+    toBlazon: () => toBlazon
+  });
+
+  // src/engine/tinctures.ts
+  var METALS = ["or", "argent"];
+  var COLOURS = ["gules", "azure", "sable", "vert", "purpure"];
+  var FURS = ["ermine", "vair"];
+  var GENERATABLE = [...METALS, ...COLOURS];
+  var TINCTURE_HEX = {
+    or: "#E0A82E",
+    argent: "#F2F2EC",
+    gules: "#B23A2E",
+    azure: "#2B5FA5",
+    sable: "#1A1A1A",
+    vert: "#2E7D3A",
+    purpure: "#6B2C91",
+    // Furs render against a base; these are the dominant base tints used as a
+    // fallback flat fill until patterned fur rendering lands.
+    ermine: "#F2F2EC",
+    vair: "#2B5FA5"
+  };
+  var TINCTURE_LABEL = {
+    or: "Or",
+    argent: "Argent",
+    gules: "Gules",
+    azure: "Azure",
+    sable: "Sable",
+    vert: "Vert",
+    purpure: "Purpure",
+    ermine: "Ermine",
+    vair: "Vair"
+  };
+  function tinctureClass(t) {
+    if (METALS.includes(t)) return "metal";
+    if (COLOURS.includes(t)) return "colour";
+    return "fur";
+  }
+  function hexOf(t) {
+    return TINCTURE_HEX[t];
+  }
+  function labelOf(t) {
+    return TINCTURE_LABEL[t];
+  }
+  function contrasts(a, b) {
+    const ca = tinctureClass(a);
+    const cb = tinctureClass(b);
+    if (ca === "fur" || cb === "fur") return true;
+    return ca !== cb;
+  }
+
+  // src/engine/rng.ts
+  function xmur3(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = h << 13 | h >>> 19;
+    }
+    return () => {
+      h = Math.imul(h ^ h >>> 16, 2246822507);
+      h = Math.imul(h ^ h >>> 13, 3266489909);
+      return (h ^= h >>> 16) >>> 0;
+    };
+  }
+  function mulberry32(a) {
+    return () => {
+      a |= 0;
+      a = a + 1831565813 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var RNG = class {
+    constructor(seed) {
+      const seedFn = xmur3(String(seed));
+      this.next = mulberry32(seedFn());
+    }
+    /** Float in [0, 1). */
+    float() {
+      return this.next();
+    }
+    /** Integer in [0, maxExclusive). */
+    int(maxExclusive) {
+      return Math.floor(this.next() * maxExclusive);
+    }
+    pick(arr) {
+      return arr[this.int(arr.length)];
+    }
+    chance(p) {
+      return this.next() < p;
+    }
+    /** Weighted pick from [item, weight] pairs. */
+    weighted(items) {
+      const total = items.reduce((s, [, w]) => s + w, 0);
+      let r = this.float() * total;
+      for (const [item, w] of items) {
+        r -= w;
+        if (r < 0) return item;
+      }
+      return items[items.length - 1][0];
+    }
+  };
+
+  // src/engine/charges.ts
+  var star5 = (fill) => `<path d="M50 6 L60 36.3 L91.85 36.4 L66.17 55.25 L75.86 85.6 L50 67 L24.14 85.6 L33.83 55.25 L8.15 36.4 L40 36.25 Z" fill="${fill}"/>`;
+  var CHARGES = {
+    mullet: {
+      id: "mullet",
+      singular: "mullet",
+      plural: "mullets",
+      article: "a",
+      render: star5
+    },
+    roundel: {
+      id: "roundel",
+      singular: "roundel",
+      plural: "roundels",
+      article: "a",
+      render: (f) => `<circle cx="50" cy="50" r="40" fill="${f}"/>`
+    },
+    annulet: {
+      id: "annulet",
+      singular: "annulet",
+      plural: "annulets",
+      article: "an",
+      render: (f) => `<circle cx="50" cy="50" r="38" fill="none" stroke="${f}" stroke-width="12"/>`
+    },
+    lozenge: {
+      id: "lozenge",
+      singular: "lozenge",
+      plural: "lozenges",
+      article: "a",
+      render: (f) => `<polygon points="50,6 86,50 50,94 14,50" fill="${f}"/>`
+    },
+    billet: {
+      id: "billet",
+      singular: "billet",
+      plural: "billets",
+      article: "a",
+      render: (f) => `<rect x="30" y="10" width="40" height="80" rx="2" fill="${f}"/>`
+    },
+    crescent: {
+      id: "crescent",
+      singular: "crescent",
+      plural: "crescents",
+      article: "a",
+      render: (f) => `<path d="M20 46 A32 32 0 1 0 80 46 A26 26 0 1 1 20 46 Z" fill="${f}"/>`
+    },
+    cross: {
+      id: "cross",
+      singular: "cross",
+      plural: "crosses",
+      article: "a",
+      render: (f) => `<path d="M40 10 H60 V40 H90 V60 H60 V90 H40 V60 H10 V40 H40 Z" fill="${f}"/>`
+    },
+    heart: {
+      id: "heart",
+      singular: "heart",
+      plural: "hearts",
+      article: "a",
+      render: (f) => `<path d="M50 88 C 6 56 16 14 50 36 C 84 14 94 56 50 88 Z" fill="${f}"/>`
+    },
+    tower: {
+      id: "tower",
+      singular: "tower",
+      plural: "towers",
+      article: "a",
+      render: (f) => `<g fill="${f}"><rect x="30" y="40" width="40" height="50"/><rect x="28" y="32" width="10" height="10"/><rect x="45" y="32" width="10" height="10"/><rect x="62" y="32" width="10" height="10"/><path d="M44 66 a6 6 0 0 1 12 0 V90 H44 Z" fill="#00000055"/></g>`
+    },
+    sword: {
+      id: "sword",
+      singular: "sword",
+      plural: "swords",
+      article: "a",
+      render: (f) => `<g fill="${f}"><polygon points="50,6 55,66 45,66"/><rect x="33" y="66" width="34" height="7"/><rect x="46" y="73" width="8" height="16"/><circle cx="50" cy="92" r="5"/></g>`
+    },
+    key: {
+      id: "key",
+      singular: "key",
+      plural: "keys",
+      article: "a",
+      render: (f) => `<g fill="${f}"><circle cx="50" cy="24" r="15" fill="none" stroke="${f}" stroke-width="8"/><rect x="46" y="36" width="8" height="52"/><rect x="54" y="72" width="12" height="8"/><rect x="54" y="84" width="9" height="7"/></g>`
+    },
+    fleur: {
+      id: "fleur",
+      singular: "fleur-de-lis",
+      plural: "fleurs-de-lis",
+      article: "a",
+      render: (f) => `<g fill="${f}"><path d="M50 6 C 41 24 43 44 50 58 C 57 44 59 24 50 6 Z"/><path d="M50 52 C 30 40 14 52 21 72 C 28 60 41 60 50 64 Z"/><path d="M50 52 C 70 40 86 52 79 72 C 72 60 59 60 50 64 Z"/><path d="M43 60 C 39 80 40 88 50 96 C 60 88 61 80 57 60 Z"/><rect x="30" y="56" width="40" height="9" rx="3"/></g>`
+    }
+  };
+  var CHARGE_IDS = Object.keys(CHARGES);
+  function getCharge(id) {
+    return CHARGES[id];
+  }
+
+  // src/engine/generate.ts
+  var DIVISIONS = [
+    "per-pale",
+    "per-fess",
+    "per-bend",
+    "per-chevron",
+    "per-saltire",
+    "quarterly"
+  ];
+  var VARIATIONS = ["barry", "paly", "checky"];
+  var ORDINARIES = [
+    "chief",
+    "pale",
+    "fess",
+    "bend",
+    "bend-sinister",
+    "chevron",
+    "cross",
+    "saltire",
+    "pile"
+  ];
+  function contrastingWith(rng, against) {
+    const pool = GENERATABLE.filter((t) => contrasts(t, against));
+    return rng.pick(pool);
+  }
+  function generateField(rng) {
+    const base = rng.pick(GENERATABLE);
+    const mode = rng.weighted([
+      ["plain", 0.55],
+      ["division", 0.3],
+      ["variation", 0.15]
+    ]);
+    if (mode === "plain") {
+      return { mode, tinctures: [base] };
+    }
+    const second = contrastingWith(rng, base);
+    if (mode === "division") {
+      return { mode, tinctures: [base, second], division: rng.pick(DIVISIONS) };
+    }
+    return { mode, tinctures: [base, second], variation: rng.pick(VARIATIONS) };
+  }
+  function arrangementFor(rng, count) {
+    if (count === 1) return "one";
+    if (count === 2) return rng.chance(0.3) ? "in-pale" : "in-fess";
+    return "two-and-one";
+  }
+  function generateCharges(rng, fieldPrimary) {
+    const count = rng.weighted([
+      [1, 0.4],
+      [3, 0.45],
+      [2, 0.15]
+    ]);
+    const group = {
+      charge: rng.pick(CHARGE_IDS),
+      tincture: contrastingWith(rng, fieldPrimary),
+      count,
+      arrangement: arrangementFor(rng, count)
+    };
+    return [group];
+  }
+  function generateOrdinary(rng, fieldPrimary) {
+    return {
+      type: rng.pick(ORDINARIES),
+      tincture: contrastingWith(rng, fieldPrimary)
+    };
+  }
+  function generate(seed) {
+    const rng = new RNG(seed);
+    const field = generateField(rng);
+    const primary = field.tinctures[0];
+    const spec = { shield: "heater", field, charges: [] };
+    if (field.mode === "plain") {
+      const content = rng.weighted([
+        ["ordinary", 0.45],
+        ["charges", 0.45],
+        ["none", 0.1]
+      ]);
+      if (content === "ordinary") {
+        spec.ordinary = generateOrdinary(rng, primary);
+      } else if (content === "charges") {
+        spec.charges = generateCharges(rng, primary);
+      }
+    }
+    return spec;
+  }
+
+  // src/engine/blazon.ts
+  var DIVISION_WORD = {
+    "per-pale": "Per pale",
+    "per-fess": "Per fess",
+    "per-bend": "Per bend",
+    "per-chevron": "Per chevron",
+    "per-saltire": "Per saltire",
+    quarterly: "Quarterly"
+  };
+  var VARIATION_WORD = {
+    barry: "Barry",
+    paly: "Paly",
+    checky: "Checky"
+  };
+  var ORDINARY_NAME = {
+    chief: "chief",
+    pale: "pale",
+    fess: "fess",
+    bend: "bend",
+    "bend-sinister": "bend sinister",
+    chevron: "chevron",
+    cross: "cross",
+    saltire: "saltire",
+    pile: "pile"
+  };
+  var COUNT_WORD = { 2: "two", 3: "three" };
+  function fieldBlazon(field) {
+    if (field.mode === "plain") {
+      return labelOf(field.tinctures[0]);
+    }
+    const [a, b] = field.tinctures;
+    if (field.mode === "division" && field.division) {
+      return `${DIVISION_WORD[field.division]} ${labelOf(a)} and ${labelOf(b)}`;
+    }
+    if (field.mode === "variation" && field.variation) {
+      return `${VARIATION_WORD[field.variation]} ${labelOf(a)} and ${labelOf(b)}`;
+    }
+    return labelOf(a);
+  }
+  function ordinaryBlazon(o) {
+    return `a ${ORDINARY_NAME[o.type]} ${labelOf(o.tincture)}`;
+  }
+  function chargeBlazon(g) {
+    var _a;
+    const def = getCharge(g.charge);
+    const singular = def ? def.singular : g.charge;
+    const plural = def ? def.plural : `${g.charge}s`;
+    const article = def ? def.article : "a";
+    if (g.count === 1) {
+      return `${article} ${singular} ${labelOf(g.tincture)}`;
+    }
+    return `${(_a = COUNT_WORD[g.count]) != null ? _a : g.count} ${plural} ${labelOf(g.tincture)}`;
+  }
+  function toBlazon(spec) {
+    const parts = [fieldBlazon(spec.field)];
+    if (spec.ordinary) parts.push(ordinaryBlazon(spec.ordinary));
+    for (const g of spec.charges) parts.push(chargeBlazon(g));
+    return parts.join(", ");
+  }
+
+  // src/engine/shields.ts
+  var SHIELD_W = 200;
+  var SHIELD_H = 230;
+  var HEATER = "M20 16 L180 16 L180 110 Q180 196 100 214 Q20 196 20 110 Z";
+  var PATHS = {
+    heater: HEATER
+  };
+  function shieldPath(shape) {
+    return PATHS[shape];
+  }
+
+  // src/engine/render.ts
+  var counter = 0;
+  function n(v) {
+    return Number(v.toFixed(3)).toString();
+  }
+  function safeId(uid) {
+    return String(uid).replace(/[^A-Za-z0-9_-]/g, "_");
+  }
+  function divisionRegions(field) {
+    const [a, b] = field.tinctures.map(hexOf);
+    const full = `<rect x="0" y="0" width="200" height="230"/>`;
+    switch (field.division) {
+      case "per-pale":
+        return `<rect x="0" y="0" width="100" height="230" fill="${a}"/><rect x="100" y="0" width="100" height="230" fill="${b}"/>`;
+      case "per-fess":
+        return `<rect x="0" y="0" width="200" height="115" fill="${a}"/><rect x="0" y="115" width="200" height="115" fill="${b}"/>`;
+      case "per-bend":
+        return `<path d="M0 -8.75 L200 238.75 L200 -20 L0 -20 Z" fill="${a}"/><path d="M0 -8.75 L200 238.75 L200 250 L0 250 Z" fill="${b}"/>`;
+      case "per-chevron":
+        return `<rect x="0" y="0" width="200" height="230" fill="${a}"/><path d="M0 230 L100 120 L200 230 L200 252 L0 252 Z" fill="${b}"/>`;
+      case "per-saltire":
+        return `<rect x="0" y="0" width="200" height="230" fill="${b}"/><path d="M0 0 L200 0 L100 115 Z" fill="${a}"/><path d="M0 230 L200 230 L100 115 Z" fill="${a}"/>`;
+      case "quarterly":
+        return `<rect x="0" y="0" width="200" height="230" fill="${b}"/><rect x="0" y="0" width="100" height="115" fill="${a}"/><rect x="100" y="115" width="100" height="115" fill="${a}"/>`;
+      default:
+        return `${full.replace("/>", ` fill="${a}"/>`)}`;
+    }
+  }
+  function variationRegions(field) {
+    const [a, b] = field.tinctures.map(hexOf);
+    let out = `<rect x="0" y="0" width="200" height="230" fill="${b}"/>`;
+    if (field.variation === "barry") {
+      const bars = 6;
+      const h = 230 / bars;
+      for (let i = 0; i < bars; i++) {
+        if (i % 2 === 0) {
+          out += `<rect x="0" y="${n(i * h)}" width="200" height="${n(h + 0.5)}" fill="${a}"/>`;
+        }
+      }
+    } else if (field.variation === "paly") {
+      const pales = 6;
+      const w = 200 / pales;
+      for (let i = 0; i < pales; i++) {
+        if (i % 2 === 0) {
+          out += `<rect x="${n(i * w)}" y="0" width="${n(w + 0.5)}" height="230" fill="${a}"/>`;
+        }
+      }
+    } else {
+      const cols = 5;
+      const rows = 6;
+      const w = 200 / cols;
+      const h = 230 / rows;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if ((r + c) % 2 === 0) {
+            out += `<rect x="${n(c * w)}" y="${n(r * h)}" width="${n(w + 0.5)}" height="${n(h + 0.5)}" fill="${a}"/>`;
+          }
+        }
+      }
+    }
+    return out;
+  }
+  function fieldMarkup(field) {
+    if (field.mode === "plain") {
+      return `<rect x="0" y="0" width="200" height="230" fill="${hexOf(field.tinctures[0])}"/>`;
+    }
+    if (field.mode === "division") return divisionRegions(field);
+    return variationRegions(field);
+  }
+  function ordinaryMarkup(o) {
+    const f = hexOf(o.tincture);
+    switch (o.type) {
+      case "chief":
+        return `<rect x="0" y="16" width="200" height="42" fill="${f}"/>`;
+      case "pale":
+        return `<rect x="77" y="0" width="46" height="230" fill="${f}"/>`;
+      case "fess":
+        return `<rect x="0" y="92" width="200" height="46" fill="${f}"/>`;
+      case "bend":
+        return `<polygon points="-16.33,4.45 16.33,-21.95 216.33,225.55 183.67,251.95" fill="${f}"/>`;
+      case "bend-sinister":
+        return `<polygon points="16.34,251.95 -16.34,225.55 183.66,-21.95 216.34,4.45" fill="${f}"/>`;
+      case "chevron":
+        return `<polyline points="20,200 100,95 180,200" fill="none" stroke="${f}" stroke-width="34" stroke-linejoin="miter"/>`;
+      case "cross":
+        return `<rect x="78" y="0" width="44" height="230" fill="${f}"/><rect x="0" y="93" width="200" height="44" fill="${f}"/>`;
+      case "saltire":
+        return `<line x1="20" y1="16" x2="180" y2="214" stroke="${f}" stroke-width="30"/><line x1="180" y1="16" x2="20" y2="214" stroke="${f}" stroke-width="30"/>`;
+      case "pile":
+        return `<polygon points="20,16 180,16 100,180" fill="${f}"/>`;
+      default:
+        return "";
+    }
+  }
+  function chargePositions(count, arrangement) {
+    if (count === 1 || arrangement === "one") return [{ x: 100, y: 118, size: 78 }];
+    if (arrangement === "in-pale")
+      return [
+        { x: 100, y: 78, size: 58 },
+        { x: 100, y: 150, size: 58 }
+      ];
+    if (arrangement === "in-fess")
+      return [
+        { x: 66, y: 112, size: 62 },
+        { x: 134, y: 112, size: 62 }
+      ];
+    return [
+      { x: 66, y: 74, size: 54 },
+      { x: 134, y: 74, size: 54 },
+      { x: 100, y: 150, size: 54 }
+    ];
+  }
+  function chargeGroupMarkup(g) {
+    const def = getCharge(g.charge);
+    if (!def) return "";
+    const fill = hexOf(g.tincture);
+    const inner = def.render(fill);
+    const positions = chargePositions(g.count, g.arrangement);
+    return positions.slice(0, g.count).map((p) => {
+      const scale = p.size / 100;
+      const tx = p.x - 50 * scale;
+      const ty = p.y - 50 * scale;
+      return `<g transform="translate(${n(tx)},${n(ty)}) scale(${n(scale)})">${inner}</g>`;
+    }).join("");
+  }
+  function renderSvg(spec, opts = {}) {
+    var _a, _b;
+    const uid = (_a = opts.uid) != null ? _a : `hf${counter++}`;
+    const outline = (_b = opts.outline) != null ? _b : "#20201e";
+    const clipId = `hf-clip-${safeId(uid)}`;
+    const path = shieldPath(spec.shield);
+    const clipped = fieldMarkup(spec.field) + (spec.ordinary ? ordinaryMarkup(spec.ordinary) : "");
+    const charges = spec.charges.map(chargeGroupMarkup).join("");
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHIELD_W} ${SHIELD_H}" role="img"><defs><clipPath id="${clipId}"><path d="${path}"/></clipPath></defs><g clip-path="url(#${clipId})">${clipped}</g>` + charges + `<path d="${path}" fill="none" stroke="${outline}" stroke-width="2"/></svg>`;
+  }
+
+  // src/engine/index.ts
+  function generateArms(seed, uid) {
+    const spec = generate(seed);
+    return {
+      seed,
+      spec,
+      blazon: toBlazon(spec),
+      svg: renderSvg(spec, { uid: uid != null ? uid : seed })
+    };
+  }
+  return __toCommonJS(engine_exports);
+})();
+</script>
+<script>
+  const SEED_SETS = {"Kingmaker":["Restov","Tuskwater","Pitax","New Stetven","Mivon","Tatzlford","Varnhold","Nivakta’s Crossing","Silverstep","Fort Drelev"],"Houses":["House Surtova","House Orlovsky","House Lebeda","House Medvyed","House Garess","House Lodovka","House Rogarvia","House Aldori"],"Random":["d7zwu3z","r849tv0","isy0bvc","3oydf16","p7op0wt","a6iq4n8","7s571yv","mhptrg8","jub55m7","tl1tyrd"]};
+  const grid = document.getElementById('grid');
+  let activeSet = 'Kingmaker';
+
+  function card(seed) {
+    const arms = HF.generateArms(seed, 'pg-' + seed);
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = arms.svg +
+      '<div class="name">' + escapeHtml(seed) + '</div>' +
+      '<div class="blazon">' + escapeHtml(arms.blazon) + '</div>';
+    el.title = 'Click to reroll this one with a fresh seed';
+    el.onclick = () => {
+      const fresh = seed + '~' + Math.random().toString(36).slice(2, 6);
+      el.replaceWith(card(fresh));
+    };
+    return el;
+  }
+
+  function renderSet(name) {
+    activeSet = name;
+    grid.innerHTML = '';
+    for (const s of SEED_SETS[name]) grid.appendChild(card(s));
+    for (const b of document.querySelectorAll('#tabs button'))
+      b.classList.toggle('active', b.dataset.set === name);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  }
+
+  const tabs = document.getElementById('tabs');
+  for (const name of Object.keys(SEED_SETS)) {
+    const b = document.createElement('button');
+    b.textContent = name; b.dataset.set = name;
+    b.onclick = () => renderSet(name);
+    tabs.appendChild(b);
+  }
+
+  document.getElementById('render').onclick = () => {
+    const v = document.getElementById('seed').value.trim();
+    if (!v) return;
+    grid.prepend(card(v));
+  };
+  document.getElementById('seed').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('render').click();
+  });
+  document.getElementById('reroll').onclick = () => {
+    SEED_SETS.Random = Array.from({ length: 10 }, () => Math.random().toString(36).slice(2, 9));
+    renderSet('Random');
+  };
+
+  // inline infobox demo
+  const ib = document.getElementById('infobox');
+  const rows = [
+    ['Capital', 'Restov'],
+    ['Ruling house', 'House Surtova'],
+    ['Vassal', 'House Lebeda'],
+    ['Settlement', 'Tatzlford'],
+  ];
+  for (const [k, v] of rows) {
+    const arms = HF.generateArms(v, 'ib-' + v);
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + k + '</td><td>' + arms.svg + ' ' + escapeHtml(v) + '</td>';
+    ib.appendChild(tr);
+  }
+
+  renderSet('Kingmaker');
+</script>
+</body>
+</html>
