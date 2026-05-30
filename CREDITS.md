@@ -36,6 +36,7 @@ render time. Each charge and its artist:
 - **trident** (`trident`) — lorc
 - **gauntlet** (`gauntlet`) — delapouite
 - **sword** (`sword-brandish`) — delapouite
+- **fleur-de-lis** (`fleur`) — delapouite
 
 Artists: Lorc, Delapouite, Caro Asercion, and the game-icons.net "badges" set —
 see https://game-icons.net for full author pages. CC BY 3.0 requires attribution

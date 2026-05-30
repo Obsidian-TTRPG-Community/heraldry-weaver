@@ -1,4 +1,4 @@
-import { shieldPath, SHIELD_W, SHIELD_H } from './shields';
+import { shieldPath, SHIELD_W, SHIELD_H, FIELD_BOUNDS } from './shields';
 import { hexOf, furInfo } from './tinctures';
 import type { FurInfo } from './tinctures';
 import { getCharge } from './charges';
@@ -37,18 +37,25 @@ interface Defs {
   patterns: Map<string, string>; // id -> markup
 }
 
-/** An ermine spot, centred on its local origin. */
+/** An ermine spot (Breton moucheture): spindle body with a three-pronged
+ *  tail and three curled pips fanned above. Centred on its local origin. */
 function ermineSpot(): string {
   return (
-    `<path d="M0 7 C -7 -1 -7 -11 0 -15 C 7 -11 7 -1 0 7 Z"/>` +
-    `<circle cx="0" cy="-18" r="2.1"/>` +
-    `<circle cx="-5" cy="-13" r="2.1"/>` +
-    `<circle cx="5" cy="-13" r="2.1"/>`
+    `<path d="M0 -16 C3 -14.5 3.8 -6 2.3 0 C5.6 1.8 9 6.5 8.4 11 C5.6 9.6 3.4 8.8 2.2 11.8 L0 18 L-2.2 11.8 C-3.4 8.8 -5.6 9.6 -8.4 11 C-9 6.5 -5.6 1.8 -2.3 0 C-3.8 -6 -3 -14.5 0 -16 Z"/>` +
+    `<path d="M0 -26 C2 -26 1.6 -20.5 0 -18 C-1.6 -20.5 -2 -26 0 -26 Z"/>` +
+    `<path d="M-7.5 -23 C-5.6 -24 -2.6 -19.8 -3.9 -16.3 C-7.3 -18 -9.4 -22 -7.5 -23 Z"/>` +
+    `<path d="M7.5 -23 C5.6 -24 2.6 -19.8 3.9 -16.3 C7.3 -18 9.4 -22 7.5 -23 Z"/>`
   );
 }
 
-const BELL_DOWN = 'M0 0 C6 16 14 20 20 20 C26 20 34 16 40 0 Z';
-const BELL_UP = 'M0 40 C6 24 14 20 20 20 C26 20 34 24 40 40 Z';
+// Vair pane (azure-over-argent by default): wide flat top, shoulders slanting
+// to a straight stem, tapering to a point. Top half-width is twice the stem
+// half-width, so the blue down-panes and the argent up-panes (negative space)
+// interlock as a true edge-sharing tessellation. Cell 40 wide x 55 tall, so
+// exactly four panes span the 160-wide field (see furPattern offset below).
+const VAIR_DOWN = 'M0 0 L40 0 L30 16 L30 39 L20 55 L10 39 L10 16 Z';
+// Mirrored pane seated a row below, for counter-vair (panes meet point-to-point).
+const VAIR_UP = 'M20 55 L30 71 L30 94 L40 110 L0 110 L10 94 L10 71 Z';
 const POTENT_DOWN = 'M0 0 H40 V6 H23 V20 H17 V6 H0 Z';
 const POTENT_UP = 'M0 40 H40 V34 H23 V20 H17 V34 H0 Z';
 
@@ -61,19 +68,36 @@ function furTile(info: FurInfo): { w: number; h: number; body: string } {
       w: 44, h: 56,
       body:
         `<rect width="44" height="56" fill="${base}"/>` +
-        `<g fill="${fig}"><g transform="translate(11,18)">${ermineSpot()}</g>` +
-        `<g transform="translate(33,46)">${ermineSpot()}</g></g>`,
+        `<g fill="${fig}"><g transform="translate(11,24)">${ermineSpot()}</g>` +
+        `<g transform="translate(33,52)">${ermineSpot()}</g></g>`,
     };
   }
-  // vair / potent share the same offset-row layout; only the figure differs.
-  const down = info.pattern === 'vair' ? BELL_DOWN : POTENT_DOWN;
-  const up = info.pattern === 'vair' ? BELL_UP : POTENT_UP;
-  const second = info.counter ? up : down;
+  if (info.pattern === 'vair') {
+    // Standard (aligned) vair: one down-pane per cell; the argent up-panes are
+    // the negative space. Counter-vair stacks a mirrored pane so the panes meet
+    // point-to-point. Either way the figure/base colours drive the tincture.
+    if (info.counter) {
+      return {
+        w: 40, h: 110,
+        body:
+          `<rect width="40" height="110" fill="${base}"/>` +
+          `<g fill="${fig}"><path d="${VAIR_DOWN}"/><path d="${VAIR_UP}"/></g>`,
+      };
+    }
+    return {
+      w: 40, h: 55,
+      body:
+        `<rect width="40" height="55" fill="${base}"/>` +
+        `<path fill="${fig}" d="${VAIR_DOWN}"/>`,
+    };
+  }
+  // potent: angular crutches in offset rows; only the second-row figure flips.
+  const second = info.counter ? POTENT_UP : POTENT_DOWN;
   return {
     w: 40, h: 40,
     body:
       `<rect width="40" height="40" fill="${base}"/>` +
-      `<g fill="${fig}"><path d="${down}"/>` +
+      `<g fill="${fig}"><path d="${POTENT_DOWN}"/>` +
       `<g transform="translate(-20,20)"><path d="${second}"/></g>` +
       `<g transform="translate(20,20)"><path d="${second}"/></g></g>`,
   };
@@ -92,7 +116,12 @@ export function furSwatchSvg(t: Tincture): string {
 
 function furPattern(info: FurInfo, id: string): string {
   const { w, h, body } = furTile(info);
-  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${w}" height="${h}">${body}</pattern>`;
+  // Start the tiling at the field's top-left corner so the pattern aligns with
+  // the shield edges (for vair, the four panes then sit flush left-to-right).
+  return (
+    `<pattern id="${id}" patternUnits="userSpaceOnUse"` +
+    ` x="${FIELD_BOUNDS.x0}" y="${FIELD_BOUNDS.y0}" width="${w}" height="${h}">${body}</pattern>`
+  );
 }
 
 /** Resolve a FIELD tincture to a fill, registering a pattern def for furs. */

@@ -20,6 +20,7 @@ import type {
   ShieldShape, Position, ChargeGroup, FurPattern,
 } from './engine/types';
 import { downloadSvg, exportPng, safeFilename } from './export';
+import { HeraldryGuideModal } from './guideModal';
 import type HeraldryWeaverPlugin from './main';
 
 export const VIEW_TYPE_HERALDRY = 'heraldry-weaver-view';
@@ -50,6 +51,9 @@ export class HeraldryWeaverView extends ItemView {
   private seed = randomSeed();
   private spec: Spec;
   private results: Roll[] = [];
+  /** Custom/variant furs created via the fur editor this session, kept so they
+   * stay available as swatches even after selecting another tincture. */
+  private customFurs: Tincture[] = [];
   private previewShield?: HTMLElement;
   private previewBlazon?: HTMLElement;
   private previewName?: HTMLElement;
@@ -97,6 +101,41 @@ export class HeraldryWeaverView extends ItemView {
     this.seed = seed;
     this.label = name;
     this.spec = spec ?? generate(seed);
+  }
+
+  /** Resolve a custom name source in the background and apply it if it returns,
+   *  so a slow/hung provider never blocks the visible roll. Ignored if the user
+   *  has rolled again (seed changed) in the meantime. */
+  private async upgradeName(seed: string): Promise<void> {
+    try {
+      const name = await this.plugin.resolveName(seed);
+      if (name && this.seed === seed && name !== this.label) {
+        this.label = name;
+        this.render();
+      }
+    } catch {
+      /* keep the built-in name already shown */
+    }
+  }
+
+  /** Same as upgradeName but for a 9-result grid. */
+  private async upgradeNames(): Promise<void> {
+    const target = this.results;
+    const seeds = target.map((r) => r.seed);
+    try {
+      const names = await Promise.all(seeds.map((s) => this.plugin.resolveName(s).catch(() => null)));
+      if (this.results !== target) return; // user rolled again; these names are stale
+      let changed = false;
+      target.forEach((r, i) => {
+        if (names[i] && names[i] !== r.name) { r.name = names[i] as string; changed = true; }
+      });
+      if (!changed) return;
+      const sel = target.find((r) => r.seed === this.seed);
+      if (sel) this.label = sel.name;
+      this.render();
+    } catch {
+      /* keep built-in names */
+    }
   }
 
   private async ensureSaved(): Promise<boolean> {
@@ -198,7 +237,7 @@ export class HeraldryWeaverView extends ItemView {
     onPick: (t: Tincture) => void,
     palette: readonly Tincture[] = GENERATABLE,
   ): HTMLElement {
-    const row = parent.createDiv({ cls: 'hw-field' });
+    const row = parent.createDiv({ cls: 'hw-field hw-field-swatches' });
     row.createSpan({ cls: 'hw-field-label', text: label });
     const sw = row.createDiv({ cls: 'hw-swatches' });
     for (const t of palette) {
@@ -234,14 +273,20 @@ export class HeraldryWeaverView extends ItemView {
       (t) => { this.spec.field.tinctures[idx] = t; this.render(); },
       FIELD_TINCTURES,
     );
-    // If the current tincture is a fur not shown among the quick swatches
-    // (a variant or custom recolour), surface it as a selected swatch.
-    if (furInfo(cur) && !FIELD_TINCTURES.includes(cur)) {
-      const b = sw.createEl('button', { cls: 'hw-swatch hw-swatch-fur is-selected' });
-      b.title = labelOf(cur);
-      b.setAttr('aria-label', labelOf(cur));
-      b.appendChild(new DOMParser().parseFromString(furSwatchSvg(cur), 'image/svg+xml').documentElement);
-      b.onclick = () => this.openFurEditor(idx);
+    // Surface custom/variant furs (the current one, plus any made this session)
+    // as selectable swatches so picking another tincture never loses them.
+    this.rememberFur(cur);
+    const extras = [...this.customFurs];
+    if (furInfo(cur) && !FIELD_TINCTURES.includes(cur) && !extras.includes(cur)) {
+      extras.unshift(cur);
+    }
+    for (const fur of extras) {
+      const b = sw.createEl('button', { cls: 'hw-swatch hw-swatch-fur' });
+      if (fur === cur) b.addClass('is-selected');
+      b.title = labelOf(fur);
+      b.setAttr('aria-label', labelOf(fur));
+      b.appendChild(new DOMParser().parseFromString(furSwatchSvg(fur), 'image/svg+xml').documentElement);
+      b.onclick = () => { this.spec.field.tinctures[idx] = fur; this.render(); };
     }
     const more = sw.createEl('button', { cls: 'hw-swatch hw-swatch-more', text: '\u2026' });
     more.title = 'Fur variants & custom';
@@ -249,12 +294,27 @@ export class HeraldryWeaverView extends ItemView {
     more.onclick = () => this.openFurEditor(idx);
   }
 
+  private openGuide(): void {
+    new HeraldryGuideModal(this.app, this.plugin.settings.outline).open();
+  }
+
   private openFurEditor(idx: number): void {
     new FurEditorModal(
       this.app,
       this.spec.field.tinctures[idx],
-      (fur) => { this.spec.field.tinctures[idx] = fur; this.render(); },
+      (fur) => {
+        this.spec.field.tinctures[idx] = fur;
+        this.rememberFur(fur);
+        this.render();
+      },
     ).open();
+  }
+
+  /** Keep a created variant/custom fur in the swatch row for the session. */
+  private rememberFur(t: Tincture): void {
+    if (furInfo(t) && !FIELD_TINCTURES.includes(t) && !this.customFurs.includes(t)) {
+      this.customFurs.push(t);
+    }
   }
 
   private sliderRow(
@@ -307,6 +367,7 @@ export class HeraldryWeaverView extends ItemView {
 
   private render(): void {
     const root = this.contentEl;
+    const scrollTop = root.scrollTop;
     root.empty();
     root.addClass('hw-view');
 
@@ -318,6 +379,9 @@ export class HeraldryWeaverView extends ItemView {
     buildTab.toggleClass('is-active', this.mode === 'build');
     rollTab.onclick = () => { this.mode = 'roll'; this.render(); };
     buildTab.onclick = () => { this.mode = 'build'; this.render(); };
+    const guideTab = tabs.createEl('button', { text: 'Guide', cls: 'hw-guide-btn' });
+    guideTab.title = 'Heraldry guide — terms, options & examples';
+    guideTab.onclick = () => this.openGuide();
 
     // shared name box
     const controls = root.createDiv({ cls: 'hw-view-controls' });
@@ -327,25 +391,30 @@ export class HeraldryWeaverView extends ItemView {
 
     if (this.mode === 'roll') {
       const genBtn = controls.createEl('button', { text: 'Generate' });
-      genBtn.onclick = async () => {
+      genBtn.onclick = () => {
         const v = input.value.trim();
         const seed = v || randomSeed();
-        this.select(seed, v || (await this.plugin.resolveName(seed)));
+        // Show the arms immediately with an instant built-in name; if a custom
+        // name source is configured, upgrade the name asynchronously so a slow
+        // or hung provider can never block the roll.
+        this.select(seed, v || generateName(seed));
         this.results = [];
         this.render();
+        if (!v) void this.upgradeName(seed);
       };
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') genBtn.click();
       });
 
       const rolls = root.createDiv({ cls: 'hw-buttons' });
-      rolls.createEl('button', { text: 'Roll 1' }).onclick = async () => {
+      rolls.createEl('button', { text: 'Roll 1' }).onclick = () => {
         const seed = randomSeed();
-        this.select(seed, await this.plugin.resolveName(seed));
+        this.select(seed, generateName(seed));
         this.results = [];
         this.render();
+        void this.upgradeName(seed);
       };
-      rolls.createEl('button', { text: 'Roll 9' }).onclick = async () => {
+      rolls.createEl('button', { text: 'Roll 9' }).onclick = () => {
         // Generate 9 visually distinct results — reroll on a repeated blazon so
         // the grid never shows the same arms twice.
         const picked: { seed: string; spec: Spec }[] = [];
@@ -358,11 +427,11 @@ export class HeraldryWeaverView extends ItemView {
           seen.add(key);
           picked.push({ seed, spec });
         }
-        const names = await Promise.all(picked.map((p) => this.plugin.resolveName(p.seed)));
-        this.results = picked.map((p, i) => ({ seed: p.seed, name: names[i], spec: p.spec }));
+        this.results = picked.map((p) => ({ seed: p.seed, name: generateName(p.seed), spec: p.spec }));
         const first = this.results[0];
         this.select(first.seed, first.name, first.spec);
         this.render();
+        void this.upgradeNames();
       };
     } else {
       this.renderBuilder(root);
@@ -372,6 +441,9 @@ export class HeraldryWeaverView extends ItemView {
     this.renderActions(root);
     if (this.mode === 'roll' && this.results.length > 1) this.renderResults(root);
     this.renderLibrary(root);
+    // Rebuilding the panel resets scroll to the top; restore where the user was
+    // so tweaking a charge/tincture doesn't jump the view.
+    root.scrollTop = scrollTop;
   }
 
   private renderBuilder(root: HTMLElement): void {

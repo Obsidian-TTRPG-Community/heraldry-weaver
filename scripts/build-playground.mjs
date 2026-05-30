@@ -33,7 +33,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Heraldry Forge \u2014 Playground</title>
+<title>Heraldry Weaver \u2014 Playground</title>
 <style>
   :root { --bg:#1c1b18; --panel:#26241f; --line:#3a382f; --ink:#ece7d8; --muted:#a39e8c; --accent:#c9a44c; }
   * { box-sizing: border-box; }
@@ -66,7 +66,7 @@ const html = `<!doctype html>
 </head>
 <body>
 <header>
-  <h1>\u269c Heraldry Forge</h1>
+  <h1>\u269c Heraldry Weaver</h1>
   <span class="sub">engine playground \u2014 v0.1.0-alpha.1 (Tier 0, self-drawn)</span>
 </header>
 <div class="controls">
@@ -157,6 +157,6 @@ const html = `<!doctype html>
 </html>
 `;
 
-const out = resolve(root, 'playground/heraldry-forge-playground.html');
+const out = resolve(root, 'playground/heraldry-weaver-playground.html');
 writeFileSync(out, html);
 console.log('wrote', out, '(' + Math.round(html.length / 1024) + ' KB)');

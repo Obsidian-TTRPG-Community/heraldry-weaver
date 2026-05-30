@@ -36,6 +36,8 @@ export interface ImportOptions {
   /** Recolour the charge to the chosen tincture (treat as a silhouette). */
   recolor?: boolean;
   label?: string;
+  /** Explicit plural for blazon (defaults to label + "s"). */
+  plural?: string;
   article?: 'a' | 'an';
 }
 
@@ -57,7 +59,7 @@ export function chargeFromSvg(
   return {
     id,
     singular: label,
-    plural: `${label}s`,
+    plural: opts.plural ?? `${label}s`,
     article: opts.article ?? 'a',
     render: (fill: string) => {
       const body = recolor

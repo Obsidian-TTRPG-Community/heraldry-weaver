@@ -36,16 +36,18 @@ const LIST = [
   ['trident', 'lorc', 'trident', 'a'],
   ['gauntlet', 'delapouite', 'gauntlet', 'a'],
   ['sword-brandish', 'delapouite', 'sword', 'a'],
+  // id 'fleur' kept for back-compat; source file is delapouite/fleur-de-lys.svg
+  ['fleur', 'delapouite', 'fleur-de-lis', 'a', 'fleur-de-lys', 'fleurs-de-lis'],
 ];
 
 const BG = /<path\b[^>]*\bd="M0 0h512v512H0z"[^>]*\/>/g;
 
 const entries = [];
 const creditLines = [];
-for (const [slug, author, label, article] of LIST) {
-  let svg = readFileSync(`${SRC}/${author}/${slug}.svg`, 'utf8').trim();
+for (const [slug, author, label, article, file, plural] of LIST) {
+  let svg = readFileSync(`${SRC}/${author}/${file ?? slug}.svg`, 'utf8').trim();
   svg = svg.replace(BG, '');
-  entries.push({ id: slug, label, article, svg });
+  entries.push({ id: slug, label, plural, article, svg });
   creditLines.push(`- **${label}** (\`${slug}\`) — ${author}`);
 }
 
@@ -54,7 +56,7 @@ const ts = `// AUTO-GENERATED. Bundled charge pack from game-icons.net (CC BY 3.
 import { chargeFromSvg } from './importCharge';
 import type { ChargeDef } from './charges';
 
-interface PackRaw { id: string; label: string; article: string; svg: string; }
+interface PackRaw { id: string; label: string; plural?: string; article: string; svg: string; }
 
 const RAW: PackRaw[] = ${JSON.stringify(entries)};
 
@@ -62,6 +64,7 @@ export const PACK_CHARGES: ChargeDef[] = RAW.map((r) =>
   chargeFromSvg(r.id, r.svg, {
     recolor: true,
     label: r.label,
+    plural: r.plural,
     article: r.article === 'an' ? 'an' : 'a',
   }),
 );

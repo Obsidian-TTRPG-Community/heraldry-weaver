@@ -55,3 +55,10 @@ test('pack: bundled charges appear in random rolls once registered', () => {
   }
   assert.ok(sawPack, 'pack charges never appeared in rolls');
 });
+
+test('the fleur-de-lis pluralises correctly in blazon', () => {
+  const fleur = PACK_CHARGES.find((c) => c.id === 'fleur');
+  assert.ok(fleur, 'pack is missing the fleur');
+  assert.equal(fleur.singular, 'fleur-de-lis');
+  assert.equal(fleur.plural, 'fleurs-de-lis');
+});

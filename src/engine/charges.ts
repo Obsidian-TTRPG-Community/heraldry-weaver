@@ -122,20 +122,6 @@ export const CHARGES: Record<string, ChargeDef> = {
       `<rect x="54" y="84" width="9" height="7"/>` +
       `</g>`,
   },
-  fleur: {
-    id: 'fleur',
-    singular: 'fleur-de-lis',
-    plural: 'fleurs-de-lis',
-    article: 'a',
-    render: (f) =>
-      `<g fill="${f}">` +
-      `<path d="M50 6 C 41 24 43 44 50 58 C 57 44 59 24 50 6 Z"/>` +
-      `<path d="M50 52 C 30 40 14 52 21 72 C 28 60 41 60 50 64 Z"/>` +
-      `<path d="M50 52 C 70 40 86 52 79 72 C 72 60 59 60 50 64 Z"/>` +
-      `<path d="M43 60 C 39 80 40 88 50 96 C 60 88 61 80 57 60 Z"/>` +
-      `<rect x="30" y="56" width="40" height="9" rx="3"/>` +
-      `</g>`,
-  },
 };
 
 export const CHARGE_IDS: readonly string[] = Object.keys(CHARGES);

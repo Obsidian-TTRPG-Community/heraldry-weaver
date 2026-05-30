@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import { toBlazon } from './engine/blazon';
 import { renderSvg } from './engine/render';
 import { runNameScript, type ScriptHost } from './nameScript';
+import { HeraldryGuideModal } from './guideModal';
 import type HeraldryWeaverPlugin from './main';
 
 export interface HeraldrySettings {
@@ -54,6 +55,16 @@ export class HeraldrySettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+
+    new Setting(containerEl)
+      .setName('Heraldry guide')
+      .setDesc('A reference to the shields, fields, tinctures, furs, ordinaries and charges this plugin offers — each with an example and a little history.')
+      .addButton((b) =>
+        b
+          .setButtonText('Open guide')
+          .setCta()
+          .onClick(() => new HeraldryGuideModal(this.app, this.plugin.settings.outline).open()),
+      );
 
     new Setting(containerEl)
       .setName('Inline prefix')
