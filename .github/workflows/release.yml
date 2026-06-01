@@ -46,7 +46,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
+          # Pull this version's section out of CHANGELOG.md for the release notes:
+          # everything between "## [<tag>]" and the next "## [" / reference-link block.
+          awk -v ver="$tag" '
+            $0 ~ "^## \\[" ver "\\]" { flag = 1; next }
+            flag && (/^## \[/ || /^\[[0-9]/) { exit }
+            flag { print }
+          ' CHANGELOG.md > release-notes.md
+          # Trim leading blank lines; fall back to a generic note if not found.
+          sed -i '/./,$!d' release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "Heraldry Weaver $tag" > release-notes.md
+          fi
           gh release create "$tag" \
             --title="$tag" \
-            --notes="Heraldry Weaver $tag" \
+            --notes-file release-notes.md \
             main.js manifest.json styles.css versions.json

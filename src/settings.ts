@@ -12,10 +12,16 @@ export interface HeraldrySettings {
   pngSize: number;
   /** Escutcheon outline colour. */
   outline: string;
-  /** Vault-relative folder scanned for custom charge SVGs (Tier 2 import). */
+  /** Vault-relative asset root; reserved subfolders (charges/, ordinaries/,
+   *  shields/, fields/, variations/) supply each element type. */
+  assetFolder: string;
+  /** Vault-relative folder scanned for custom charge art (.svg/.wmf; Tier 2). */
   chargeFolder: string;
   /** Recolour imported charges to the chosen tincture (treat as silhouettes). */
   recolorImports: boolean;
+  /** Let the Roll generator pull in imported assets (charges, ordinaries,
+   *  shields, fields, variations, furs) as well as the built-ins. */
+  includeCustomInRolls: boolean;
   /** Frontmatter property bare references read for a per-note seed. */
   seedProperty: string;
   /** Include the bundled game-icons charge pack in the builder. */
@@ -34,8 +40,10 @@ export const DEFAULT_SETTINGS: HeraldrySettings = {
   inlinePrefix: 'heraldry:',
   pngSize: 512,
   outline: '#20201e',
+  assetFolder: 'Heraldry Weaver',
   chargeFolder: 'Heraldry Weaver/charges',
   recolorImports: true,
+  includeCustomInRolls: false,
   seedProperty: 'heraldry-seed',
   enablePack: true,
   staticInserts: true,
@@ -194,7 +202,45 @@ export class HeraldrySettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl).setName('Custom charges').setHeading();
+    new Setting(containerEl).setName('Custom assets').setHeading();
+
+    new Setting(containerEl)
+      .setName('Compatible art packs')
+      .setDesc(
+        createFragment((f) => {
+          f.appendText(
+            'Heraldry Weaver reads standard SVG and WMF vector art, so it works with commercial heraldic art packs such as ',
+          );
+          const a = f.createEl('a', {
+            text: 'heraldryclipart.com',
+            href: 'https://www.heraldryclipart.com/',
+          });
+          a.setAttr('target', '_blank');
+          a.setAttr('rel', 'noopener');
+          f.appendText(
+            '. No artwork ships with the plugin — it stays free of third-party assets — but anything you buy there (or any SVG/WMF you own) drops straight in. ',
+          );
+          f.createEl('br');
+          f.createEl('br');
+          f.appendText('Put each file in the matching reserved subfolder inside your asset folder (set below):');
+          const ul = f.createEl('ul');
+          for (const [folder, what] of [
+            ['charges/', 'individual charges (lions, crosses, stars\u2026)'],
+            ['ordinaries/', 'fesses, bends, chevrons and the like'],
+            ['shields/', 'escutcheon outlines'],
+            ['fields/', 'background images / full field art'],
+            ['variations/', 'tiling field patterns'],
+            ['furs/', 'sem\u00e9 / fur sheets used as tinctures'],
+          ] as [string, string][]) {
+            const li = ul.createEl('li');
+            li.createEl('strong', { text: folder });
+            li.appendText(' \u2014 ' + what);
+          }
+          f.appendText(
+            'Use the \u201cCreate subfolders\u201d button below to make them all, then drop files in and hit \u201cReload custom assets\u201d. Nested folders within any of these become categories in the pickers. WMF is the vector format those sites provide; EPS isn\u2019t supported, but their assets ship a WMF twin.',
+          );
+        }),
+      );
 
     new Setting(containerEl)
       .setName('Bundled charge pack')
@@ -209,20 +255,37 @@ export class HeraldrySettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Charge folder')
-      .setDesc('Vault folder scanned for .svg files to use as custom charges.')
+      .setName('Asset folder')
+      .setDesc('Vault folder with reserved type-subfolders: charges/, ordinaries/, shields/, fields/, variations/, furs/. Drop .svg or .wmf files into the matching subfolder; nested folders within each become picker categories. (WMF is the vector format from sites like heraldryclipart.com; EPS isn\u2019t supported, but those assets ship a WMF twin.)')
       .addText((t) =>
         t
-          .setValue(this.plugin.settings.chargeFolder)
+          .setValue(this.plugin.settings.assetFolder)
           .onChange(async (v) => {
-            this.plugin.settings.chargeFolder = v;
+            this.plugin.settings.assetFolder = v;
             await this.plugin.saveAll();
+          }),
+      )
+      .addButton((b) =>
+        b
+          .setButtonText('Create subfolders')
+          .setTooltip('Create the asset folder and its five reserved type-subfolders in your vault')
+          .onClick(async () => {
+            const { created, existing, root } = await this.plugin.createAssetFolders();
+            if (!root) {
+              new Notice('Set an asset folder name first.');
+              return;
+            }
+            new Notice(
+              created > 0
+                ? `Created ${created} subfolder(s) in "${root}".`
+                : `All ${existing} subfolders already exist in "${root}".`,
+            );
           }),
       );
 
     new Setting(containerEl)
       .setName('Recolour imported charges')
-      .setDesc('Treat imported SVGs as silhouettes and recolour them to the chosen tincture.')
+      .setDesc('Treat imported charges/ordinaries as silhouettes and recolour to the chosen tincture. Turn this off to keep original colours (recommended for full-colour clip-art such as heraldic achievements). Shields, fields and variations always keep their own artwork.')
       .addToggle((t) =>
         t.setValue(this.plugin.settings.recolorImports).onChange(async (v) => {
           this.plugin.settings.recolorImports = v;
@@ -233,8 +296,19 @@ export class HeraldrySettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Reload custom charges')
-      .setDesc(`${this.plugin.importedCharges.length} custom charge(s) currently loaded.`)
+      .setName('Include custom content in rolls')
+      .setDesc('Let the Roll tab use your imported assets — custom charges, ordinaries, shields, fields, variations and furs — alongside the built-ins. Off by default so rolls stay reproducible.')
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.includeCustomInRolls).onChange(async (v) => {
+          this.plugin.settings.includeCustomInRolls = v;
+          await this.plugin.saveAll();
+          this.plugin.refreshViews();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('Reload custom assets')
+      .setDesc(`${this.plugin.importedCharges.length} custom asset(s) currently loaded.`)
       .addButton((b) =>
         b.setButtonText('Reload').onClick(async () => {
           await this.plugin.loadCustomCharges();

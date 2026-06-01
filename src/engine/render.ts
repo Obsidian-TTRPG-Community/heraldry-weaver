@@ -1,7 +1,15 @@
-import { shieldPath, SHIELD_W, SHIELD_H, FIELD_BOUNDS } from './shields';
-import { hexOf, furInfo } from './tinctures';
+import { shieldPath, builtinShieldPath, SHIELD_W, SHIELD_H, FIELD_BOUNDS } from './shields';
+import {
+  getOrdinaryAsset,
+  getShieldAsset,
+  getFieldAsset,
+  getVariationAsset,
+  fitTransform,
+} from './assets';
+import { hexOf, furInfo, parseCustomFur } from './tinctures';
 import type { FurInfo } from './tinctures';
 import { getCharge } from './charges';
+import { stripColours, applyColourMap } from './importCharge';
 import { positionOf } from './options';
 import type {
   Spec,
@@ -105,6 +113,16 @@ function furTile(info: FurInfo): { w: number; h: number; body: string } {
 
 /** A small standalone fur tile for UI swatches (no <defs>/pattern needed). */
 export function furSwatchSvg(t: Tincture): string {
+  const cf = parseCustomFur(t);
+  if (cf) {
+    const body = cf.target
+      ? `<g fill="${hexOf(cf.target)}" stroke="${hexOf(cf.target)}">${stripColours(cf.def.inner)}</g>`
+      : cf.def.inner;
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cf.def.w} ${cf.def.h}" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">` +
+      `${body}</svg>`
+    );
+  }
   const info = furInfo(t);
   if (!info) return '';
   const { w, h, body } = furTile(info);
@@ -127,11 +145,35 @@ function furPattern(info: FurInfo, id: string): string {
 /** Resolve a FIELD tincture to a fill, registering a pattern def for furs. */
 function paint(t: Tincture, defs: Defs): string {
   const info = furInfo(t);
-  if (!info) return hexOf(t);
-  const key = `${info.pattern}-${info.base}-${info.figure}${info.counter ? '-c' : ''}`;
-  const id = `hw-fur-${key}-${defs.uid}`;
-  if (!defs.patterns.has(id)) defs.patterns.set(id, furPattern(info, id));
-  return `url(#${id})`;
+  if (info) {
+    const key = `${info.pattern}-${info.base}-${info.figure}${info.counter ? '-c' : ''}`;
+    const id = `hw-fur-${key}-${defs.uid}`;
+    if (!defs.patterns.has(id)) defs.patterns.set(id, furPattern(info, id));
+    return `url(#${id})`;
+  }
+  const cf = parseCustomFur(t);
+  if (cf) {
+    const safe = (t as string).replace(/[^A-Za-z0-9]+/g, '-');
+    const id = `hw-cfur-${safe}-${defs.uid}`;
+    if (!defs.patterns.has(id)) defs.patterns.set(id, customFurPattern(cf.def, cf.target, id));
+    return `url(#${id})`;
+  }
+  return hexOf(t);
+}
+
+/** A custom fur fills by COVER (these sheets are pre-tiled semés, so a single
+ *  cover-fit tile over the whole canvas reads correctly; divisions show slices). */
+function customFurPattern(def: { inner: string; w: number; h: number }, target: Tincture | undefined, id: string): string {
+  const box = {
+    x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
+    w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
+  };
+  const t = fitTransform({ x: 0, y: 0, w: def.w, h: def.h }, box, 'cover');
+  const body = target
+    ? `<g fill="${hexOf(target)}" stroke="${hexOf(target)}">${stripColours(def.inner)}</g>`
+    : def.inner;
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" x="0" y="0" width="${SHIELD_W}" height="${SHIELD_H}">` +
+    `<g transform="${t}">${body}</g></pattern>`;
 }
 
 // --- field regions -----------------------------------------------------------
@@ -178,6 +220,25 @@ function divisionRegions(field: Field, defs: Defs): string {
 }
 
 function variationRegions(field: Field, defs: Defs): string {
+  // Imported tiling variation: register a pattern of the art and fill the field.
+  const v = field.variation;
+  if (v) {
+    const art = getVariationAsset(v);
+    if (art) {
+      const tileW = 40;
+      const tileH = art.w > 0 ? 40 * (art.h / art.w) : 40;
+      const id = `hw-var-${v.replace(/[^A-Za-z0-9]+/g, '-')}-${defs.uid}`;
+      if (!defs.patterns.has(id)) {
+        const s = tileW / (art.w || 1);
+        defs.patterns.set(
+          id,
+          `<pattern id="${id}" patternUnits="userSpaceOnUse" x="${FIELD_BOUNDS.x0}" y="${FIELD_BOUNDS.y0}"` +
+            ` width="${n(tileW)}" height="${n(tileH)}"><g transform="scale(${n(s)})">${art.inner}</g></pattern>`,
+        );
+      }
+      return `<rect x="0" y="0" width="200" height="230" fill="url(#${id})"/>`;
+    }
+  }
   const a = paint(field.tinctures[0], defs);
   const b = paint(field.tinctures[1] ?? field.tinctures[0], defs);
   let out = `<rect x="0" y="0" width="200" height="230" fill="${b}"/>`;
@@ -218,6 +279,36 @@ function fieldMarkup(field: Field, defs: Defs): string {
   if (field.mode === 'plain') {
     return `<rect x="0" y="0" width="200" height="230" fill="${paint(field.tinctures[0], defs)}"/>`;
   }
+  if (field.mode === 'image') {
+    const art = field.image ? getFieldAsset(field.image) : undefined;
+    if (!art) return `<rect x="0" y="0" width="200" height="230" fill="${paint(field.tinctures[0], defs)}"/>`;
+    const box = {
+      x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
+      w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
+    };
+    const t = fitTransform({ x: 0, y: 0, w: art.w, h: art.h }, box, 'cover');
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const k = field.scale && field.scale > 0 ? field.scale : 1;
+    const dx = field.offsetX ? (field.offsetX / 100) * box.w : 0;
+    const dy = field.offsetY ? (field.offsetY / 100) * box.h : 0;
+    const adjust = k === 1 && !dx && !dy
+      ? ''
+      : `translate(${n(dx)} ${n(dy)}) translate(${n(cx)} ${n(cy)}) scale(${n(k)}) translate(${n(-cx)} ${n(-cy)}) `;
+    let body: string;
+    if (field.keepColour === false) {
+      const fill = hexOf(field.tinctures[0]);
+      body = `<g fill="${fill}" stroke="${fill}">${stripColours(art.inner)}</g>`;
+    } else if (field.colourMap && Object.keys(field.colourMap).length) {
+      body = applyColourMap(art.inner, field.colourMap);
+    } else {
+      body = art.inner;
+    }
+    const bg = field.bg
+      ? `<rect x="0" y="0" width="200" height="230" fill="${paint(field.bg, defs)}"/>`
+      : '';
+    return `${bg}<g transform="${adjust}${t}">${body}</g>`;
+  }
   if (field.mode === 'division') return divisionRegions(field, defs);
   return variationRegions(field, defs);
 }
@@ -251,8 +342,25 @@ function ordinaryMarkup(o: Ordinary): string {
       );
     case 'pile':
       return `<polygon points="20,16 180,16 100,180" fill="${f}"/>`;
-    default:
-      return '';
+    default: {
+      // Imported ordinary: a recolourable shape fitted to the field box, then
+      // scaled about the shield centre (so it grows/shrinks evenly both ways).
+      const def = getOrdinaryAsset(o.type);
+      if (!def) return '';
+      const box = {
+        x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
+        w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
+      };
+      const fit = fitTransform({ x: 0, y: 0, w: 100, h: 100 }, box, 'contain');
+      const k = o.scale && o.scale > 0 ? o.scale : 1;
+      const cx = box.x + box.w / 2;
+      const cy = box.y + box.h / 2;
+      const grow = k === 1 ? '' : `translate(${n(cx)} ${n(cy)}) scale(${n(k)}) translate(${n(-cx)} ${n(-cy)}) `;
+      const dx = o.offsetX ? (o.offsetX / 100) * box.w : 0;
+      const shift = dx ? `translate(${n(dx)} 0) ` : '';
+      const body = def.render(f, { keepColour: o.keepColour, colourMap: o.colourMap });
+      return `<g transform="${shift}${grow}${fit}">${body}</g>`;
+    }
   }
 }
 
@@ -324,7 +432,7 @@ function chargeGroupMarkup(g: ChargeGroup): string {
   const def = getCharge(g.charge);
   if (!def) return '';
   const fill = hexOf(g.tincture);
-  const inner = def.render(fill);
+  const inner = def.render(fill, { keepColour: g.keepColour, colourMap: g.colourMap });
   const mult = g.scale && g.scale > 0 ? g.scale : 1;
   const positions = chargePositions(g.count, g.arrangement, positionOf(g));
   return positions
@@ -359,7 +467,31 @@ export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
   // collision would make one shield borrow another's clip or fill.
   const safe = `${safeId(opts.uid ?? 'hw')}-${counter++}`;
   const clipId = `hw-clip-${safe}`;
-  const path = shieldPath(spec.shield);
+
+  // Resolve the escutcheon: a built-in path, or an imported outline fitted to
+  // the field box (used for both the clip region and the border stroke).
+  let clipChild: string;
+  let border: string;
+  const builtin = builtinShieldPath(spec.shield);
+  if (builtin) {
+    clipChild = `<path d="${builtin}"/>`;
+    border = `<path d="${builtin}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+  } else {
+    const sh = getShieldAsset(spec.shield);
+    const box = {
+      x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
+      w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
+    };
+    if (sh) {
+      const t = fitTransform({ x: 0, y: 0, w: sh.w, h: sh.h }, box, 'contain');
+      clipChild = `<path d="${sh.d}" transform="${t}"/>`;
+      border = `<path d="${sh.d}" transform="${t}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+    } else {
+      const h = shieldPath('heater');
+      clipChild = `<path d="${h}"/>`;
+      border = `<path d="${h}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+    }
+  }
   const defs: Defs = { uid: safe, patterns: new Map() };
 
   const clipped = fieldMarkup(spec.field, defs) +
@@ -373,10 +505,10 @@ export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHIELD_W} ${SHIELD_H}" role="img">` +
-    `<defs><clipPath id="${clipId}"><path d="${path}"/></clipPath>${patternDefs}</defs>` +
+    `<defs><clipPath id="${clipId}">${clipChild}</clipPath>${patternDefs}</defs>` +
     `<g clip-path="url(#${clipId})">${clipped}</g>` +
     charges +
-    `<path d="${path}" fill="none" stroke="${outline}" stroke-width="2"/>` +
+    border +
     `</svg>`
   );
 }

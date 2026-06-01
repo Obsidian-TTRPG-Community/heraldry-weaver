@@ -1,7 +1,8 @@
 import { labelOf } from './tinctures';
 import { getCharge } from './charges';
+import { getOrdinaryAsset, getFieldAsset, getVariationAsset } from './assets';
 import { positionOf } from './options';
-import type { Spec, Field, Ordinary, ChargeGroup, OrdinaryType, Position } from './types';
+import type { Spec, Field, Ordinary, ChargeGroup, Position } from './types';
 
 const DIVISION_WORD: Record<string, string> = {
   'per-pale': 'Per pale',
@@ -18,7 +19,7 @@ const VARIATION_WORD: Record<string, string> = {
   checky: 'Checky',
 };
 
-const ORDINARY_NAME: Record<OrdinaryType, string> = {
+const ORDINARY_NAME: Record<string, string> = {
   chief: 'chief',
   pale: 'pale',
   fess: 'fess',
@@ -36,18 +37,27 @@ function fieldBlazon(field: Field): string {
   if (field.mode === 'plain') {
     return labelOf(field.tinctures[0]);
   }
+  if (field.mode === 'image') {
+    const art = field.image ? getFieldAsset(field.image) : undefined;
+    return art ? `a field of ${art.label}` : labelOf(field.tinctures[0]);
+  }
   const [a, b] = field.tinctures;
   if (field.mode === 'division' && field.division) {
     return `${DIVISION_WORD[field.division]} ${labelOf(a)} and ${labelOf(b)}`;
   }
   if (field.mode === 'variation' && field.variation) {
-    return `${VARIATION_WORD[field.variation]} ${labelOf(a)} and ${labelOf(b)}`;
+    const word = VARIATION_WORD[field.variation];
+    if (word) return `${word} ${labelOf(a)} and ${labelOf(b)}`;
+    const v = getVariationAsset(field.variation);
+    return v ? v.label : labelOf(a);
   }
   return labelOf(a);
 }
 
 function ordinaryBlazon(o: Ordinary): string {
-  return `a ${ORDINARY_NAME[o.type]} ${labelOf(o.tincture)}`;
+  const name = ORDINARY_NAME[o.type] ?? getOrdinaryAsset(o.type)?.singular ?? o.type;
+  const tinc = o.keepColour ? 'proper' : labelOf(o.tincture);
+  return `a ${name} ${tinc}`;
 }
 
 const POSITION_SUFFIX: Record<Position, string> = {
@@ -76,10 +86,12 @@ function chargeBlazon(g: ChargeGroup): string {
   const article = def ? def.article : 'a';
   const flip = flipTerm(g);
   const suffix = POSITION_SUFFIX[positionOf(g)] ?? '';
+  // A charge shown in its own (original) colours is blazoned "proper".
+  const tincture = g.keepColour ? 'proper' : labelOf(g.tincture);
   if (g.count === 1) {
-    return `${article} ${singular} ${labelOf(g.tincture)}${flip}${suffix}`;
+    return `${article} ${singular} ${tincture}${flip}${suffix}`;
   }
-  return `${COUNT_WORD[g.count] ?? g.count} ${plural} ${labelOf(g.tincture)}${flip}${suffix}`;
+  return `${COUNT_WORD[g.count] ?? g.count} ${plural} ${tincture}${flip}${suffix}`;
 }
 
 /** Render a spec as a formal blazon, e.g. "Azure, a bend Or". */

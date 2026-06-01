@@ -20,7 +20,7 @@ export type Tincture = Metal | Colour | Fur;
 export type TinctureClass = 'metal' | 'colour' | 'fur';
 
 // How the field (background) is treated.
-export type FieldMode = 'plain' | 'division' | 'variation';
+export type FieldMode = 'plain' | 'division' | 'variation' | 'image';
 
 export type Division =
   | 'per-pale'
@@ -30,7 +30,9 @@ export type Division =
   | 'per-saltire'
   | 'quarterly';
 
-export type Variation = 'barry' | 'paly' | 'checky';
+/** Built-in variations; imported variation ids are also accepted. */
+export type BuiltinVariation = 'barry' | 'paly' | 'checky';
+export type Variation = BuiltinVariation | (string & {});
 
 export interface Field {
   mode: FieldMode;
@@ -38,9 +40,25 @@ export interface Field {
   tinctures: Tincture[];
   division?: Division;
   variation?: Variation;
+  /** Imported field-art id when mode is 'image'. */
+  image?: string;
+  /** For 'image' fields: keep the art's own colours (default true). When false
+   *  the art is flattened to a silhouette in tinctures[0]. */
+  keepColour?: boolean;
+  /** For 'image' fields: remap specific source colours (hex) to tincture hexes. */
+  colourMap?: Record<string, string>;
+  /** For 'image' fields: tincture filled behind the art (covers any transparent
+   *  areas in the source). Undefined = no background (transparent). */
+  bg?: Tincture;
+  /** For 'image' fields: scale about the field-box centre (default 1). */
+  scale?: number;
+  /** For 'image' fields: nudge, % of field box width/height (default 0). */
+  offsetX?: number;
+  offsetY?: number;
 }
 
-export type OrdinaryType =
+/** Built-in ordinaries; imported ordinary ids are also accepted. */
+export type BuiltinOrdinary =
   | 'chief'
   | 'pale'
   | 'fess'
@@ -50,10 +68,18 @@ export type OrdinaryType =
   | 'cross'
   | 'saltire'
   | 'pile';
+export type OrdinaryType = BuiltinOrdinary | (string & {});
 
 export interface Ordinary {
   type: OrdinaryType;
   tincture: Tincture;
+  /** For imported ordinaries: keep original colours / remap individual ones. */
+  keepColour?: boolean;
+  colourMap?: Record<string, string>;
+  /** For imported ordinaries: scale about the shield centre (default 1). */
+  scale?: number;
+  /** For imported ordinaries: horizontal centre nudge, % of field width (default 0). */
+  offsetX?: number;
 }
 
 export type Arrangement = 'one' | 'in-fess' | 'in-pale' | 'two-and-one';
@@ -84,9 +110,16 @@ export interface ChargeGroup {
   flipX?: boolean;
   /** Flip the charge vertically (inverted). */
   flipY?: boolean;
+  /** For imported charges that carry their own colours: render in those
+   *  original colours ("proper") rather than recolouring to `tincture`. */
+  keepColour?: boolean;
+  /** When keepColour is on, remap individual original colours (lower-cased hex
+   *  key) to a chosen colour; unmapped colours stay original. */
+  colourMap?: Record<string, string>;
 }
 
-export type ShieldShape = 'heater' | 'french' | 'spanish' | 'lozenge' | 'round';
+export type BuiltinShield = 'heater' | 'french' | 'spanish' | 'lozenge' | 'round';
+export type ShieldShape = BuiltinShield | (string & {});
 
 export interface Spec {
   shield: ShieldShape;

@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, MarkdownView, Notice, Modal, App, Editor } from 'obsidian';
-import { generate } from './engine/generate';
+import { generate, type GenerateOptions } from './engine/generate';
 import { generateName } from './engine/names';
 import { toBlazon } from './engine/blazon';
 import { renderSvg, furSwatchSvg } from './engine/render';
@@ -7,8 +7,16 @@ import { encodeSpec, decodeSpec } from './engine/config';
 import {
   GENERATABLE, FIELD_TINCTURES, METALS, COLOURS, hexOf, labelOf, contrasts, tinctureClass,
   furInfo, makeFur, matchPreset, NAMED_FURS, FUR_PATTERNS, FUR_PRESETS,
+  isCustomFur, listCustomFurs, makeCustomFur, parseCustomFur,
 } from './engine/tinctures';
-import { listChargeIds, getCharge } from './engine/charges';
+import { getCharge, chargeGroups, isImported, listImportedChargeIds } from './engine/charges';
+import {
+  shieldAssetGroups, getShieldAsset,
+  ordinaryAssetGroups, getOrdinaryAsset, isImportedOrdinary,
+  fieldAssetGroups, getFieldAsset,
+  variationAssetGroups, getVariationAsset,
+  listShieldAssetIds, listOrdinaryAssetIds, listFieldAssetIds, listVariationAssetIds,
+} from './engine/assets';
 import {
   SHIELDS, SHIELD_LABEL, POSITIONS, POSITION_LABEL, positionOf,
   DIVISIONS, VARIATIONS, ORDINARIES,
@@ -17,7 +25,7 @@ import {
 } from './engine/options';
 import type {
   Spec, Tincture, FieldMode, Division, Variation, OrdinaryType, Arrangement,
-  ShieldShape, Position, ChargeGroup, FurPattern,
+  ShieldShape, Position, ChargeGroup, FurPattern, Field,
 } from './engine/types';
 import { downloadSvg, exportPng, safeFilename } from './export';
 import { HeraldryGuideModal } from './guideModal';
@@ -62,7 +70,20 @@ export class HeraldryWeaverView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.label = generateName(this.seed);
-    this.spec = generate(this.seed);
+    this.spec = generate(this.seed, this.genOptions());
+  }
+
+  /** Imported asset pools fed to the random generator, when the user opts in. */
+  private genOptions(): GenerateOptions {
+    if (!this.plugin.settings.includeCustomInRolls) return {};
+    return {
+      shields: listShieldAssetIds(),
+      charges: listImportedChargeIds(),
+      ordinaries: listOrdinaryAssetIds(),
+      fields: listFieldAssetIds(),
+      variations: listVariationAssetIds(),
+      furs: listCustomFurs().map((f) => makeCustomFur(f.id)),
+    };
   }
 
   getViewType(): string { return VIEW_TYPE_HERALDRY; }
@@ -100,7 +121,7 @@ export class HeraldryWeaverView extends ItemView {
   private select(seed: string, name: string, spec?: Spec): void {
     this.seed = seed;
     this.label = name;
-    this.spec = spec ?? generate(seed);
+    this.spec = spec ?? generate(seed, this.genOptions());
   }
 
   /** Resolve a custom name source in the background and apply it if it returns,
@@ -155,6 +176,11 @@ export class HeraldryWeaverView extends ItemView {
       this.spec.field = { mode: 'plain', tinctures: [f.tinctures[0] ?? 'azure'] };
       return;
     }
+    if (mode === 'image') {
+      const first = fieldAssetGroups()[0]?.ids[0];
+      this.spec.field = { mode: 'image', tinctures: [f.tinctures[0] ?? 'azure'], image: f.image ?? first, keepColour: f.keepColour ?? true, bg: f.bg ?? 'argent' };
+      return;
+    }
     const t0 = f.tinctures[0] ?? 'or';
     const t1 = f.tinctures[1] ?? defaultContrast(t0);
     if (mode === 'division') {
@@ -173,6 +199,8 @@ export class HeraldryWeaverView extends ItemView {
     this.spec.ordinary = {
       type,
       tincture: this.spec.ordinary?.tincture ?? defaultContrast(prim),
+      keepColour: this.spec.ordinary?.keepColour,
+      colourMap: this.spec.ordinary?.colourMap,
     };
   }
 
@@ -230,6 +258,143 @@ export class HeraldryWeaverView extends ItemView {
     sel.onchange = () => onChange(sel.value);
   }
 
+  /** Charge "Type" picker, grouped into <optgroup>s by category (built-in,
+   *  pack, then imported subfolders) once there's more than one group. */
+  private chargeTypeRow(
+    parent: HTMLElement,
+    current: string,
+    onChange: (v: string) => void,
+  ): void {
+    const row = parent.createDiv({ cls: 'hw-field' });
+    row.createSpan({ cls: 'hw-field-label', text: 'Type' });
+    const sel = row.createEl('select', { cls: 'hw-select' });
+    const groups = chargeGroups();
+    const flat = groups.length <= 1;
+    for (const grp of groups) {
+      const target = flat
+        ? sel
+        : sel.createEl('optgroup', { attr: { label: grp.label } });
+      for (const id of grp.ids) {
+        const o = target.createEl('option', { text: chargeLabel(id), value: id });
+        if (id === current) o.selected = true;
+      }
+    }
+    sel.onchange = () => onChange(sel.value);
+  }
+
+  /** Which imported asset's colour (scope + lower-cased hex) currently has its
+   *  remap palette open, if any. Scope is `c<index>` for a charge, `ord` for the
+   *  ordinary. */
+  private colourEdit: { scope: string; hex: string } | null = null;
+
+  /** Shared "Original colours" toggle + per-colour remap palette for any target
+   *  carrying { keepColour, colourMap } (imported charge or ordinary). */
+  private colourEditor(
+    card: HTMLElement,
+    target: { keepColour?: boolean; colourMap?: Record<string, string> },
+    palette: string[],
+    scope: string,
+  ): void {
+    const row = card.createDiv({ cls: 'hw-field' });
+    row.createSpan({ cls: 'hw-field-label', text: 'Colours' });
+    const pill = row.createEl('button', { cls: 'hw-pill', text: 'Original colours' });
+    pill.title = 'Keep the artwork\u2019s own colours (then recolour individual ones below)';
+    if (target.keepColour) pill.addClass('is-selected');
+    pill.onclick = () => {
+      target.keepColour = !target.keepColour;
+      if (!target.keepColour) this.colourEdit = null;
+      this.render();
+    };
+
+    if (!target.keepColour || !palette.length) return;
+
+    const palRow = card.createDiv({ cls: 'hw-field hw-field-swatches' });
+    palRow.createSpan({ cls: 'hw-field-label', text: `Recolour (${palette.length})` });
+    const sw = palRow.createDiv({ cls: 'hw-swatches' });
+    for (const orig of palette) {
+      const key = orig.toLowerCase();
+      const mapped = target.colourMap?.[key];
+      const b = sw.createEl('button', { cls: 'hw-swatch' });
+      b.style.background = mapped ?? orig;
+      b.title = mapped ? `${orig} \u2192 ${mapped}` : orig;
+      if (mapped) b.addClass('is-mapped');
+      if (this.colourEdit && this.colourEdit.scope === scope && this.colourEdit.hex === key) {
+        b.addClass('is-selected');
+      }
+      b.onclick = () => {
+        const open = this.colourEdit?.scope === scope && this.colourEdit?.hex === key;
+        this.colourEdit = open ? null : { scope, hex: key };
+        this.render();
+      };
+    }
+
+    if (this.colourEdit && this.colourEdit.scope === scope) {
+      const key = this.colourEdit.hex;
+      const ed = card.createDiv({ cls: 'hw-field hw-field-swatches hw-colour-editor' });
+      ed.createSpan({ cls: 'hw-field-label', text: 'Map to' });
+      const opts = ed.createDiv({ cls: 'hw-swatches' });
+      const reset = opts.createEl('button', { cls: 'hw-swatch hw-swatch-reset', text: '\u21ba' });
+      reset.title = 'Keep original colour';
+      reset.style.background = key;
+      if (!target.colourMap?.[key]) reset.addClass('is-selected');
+      reset.onclick = () => {
+        if (target.colourMap) {
+          delete target.colourMap[key];
+          if (!Object.keys(target.colourMap).length) delete target.colourMap;
+        }
+        this.render();
+      };
+      for (const t of GENERATABLE.filter((x) => tinctureClass(x) !== 'fur')) {
+        const hex = hexOf(t);
+        const b = opts.createEl('button', { cls: 'hw-swatch' });
+        b.style.background = hex;
+        b.title = labelOf(t);
+        if ((target.colourMap?.[key] ?? '').toLowerCase() === hex.toLowerCase()) b.addClass('is-selected');
+        b.onclick = () => {
+          target.colourMap = { ...(target.colourMap ?? {}), [key]: hex };
+          this.render();
+        };
+      }
+    }
+  }
+
+  /** Colour controls for an imported charge instance. */
+  private colourControls(card: HTMLElement, g: ChargeGroup, ci: number): void {
+    if (!isImported(g.charge)) return;
+    this.colourEditor(card, g, getCharge(g.charge)?.palette ?? [], `c${ci}`);
+  }
+
+  /** A select combining built-in options with imported asset groups. Built-ins
+   *  go under a "Built-in" optgroup once any imported group is present. */
+  private groupedSelect(
+    parent: HTMLElement,
+    label: string,
+    base: [string, string][],
+    groups: { label: string; ids: string[] }[],
+    idLabel: (id: string) => string,
+    current: string,
+    onChange: (v: string) => void,
+  ): void {
+    const row = parent.createDiv({ cls: 'hw-field' });
+    row.createSpan({ cls: 'hw-field-label', text: label });
+    const sel = row.createEl('select', { cls: 'hw-select' });
+    const baseTarget = groups.length
+      ? sel.createEl('optgroup', { attr: { label: 'Built-in' } })
+      : sel;
+    for (const [val, lab] of base) {
+      const o = baseTarget.createEl('option', { text: lab, value: val });
+      if (val === current) o.selected = true;
+    }
+    for (const grp of groups) {
+      const og = sel.createEl('optgroup', { attr: { label: grp.label } });
+      for (const id of grp.ids) {
+        const o = og.createEl('option', { text: idLabel(id), value: id });
+        if (id === current) o.selected = true;
+      }
+    }
+    sel.onchange = () => onChange(sel.value);
+  }
+
   private swatchRow(
     parent: HTMLElement,
     label: string,
@@ -277,7 +442,7 @@ export class HeraldryWeaverView extends ItemView {
     // as selectable swatches so picking another tincture never loses them.
     this.rememberFur(cur);
     const extras = [...this.customFurs];
-    if (furInfo(cur) && !FIELD_TINCTURES.includes(cur) && !extras.includes(cur)) {
+    if ((furInfo(cur) || isCustomFur(cur)) && !FIELD_TINCTURES.includes(cur) && !extras.includes(cur)) {
       extras.unshift(cur);
     }
     for (const fur of extras) {
@@ -292,6 +457,31 @@ export class HeraldryWeaverView extends ItemView {
     more.title = 'Fur variants & custom';
     more.setAttr('aria-label', 'Fur variants and custom');
     more.onclick = () => this.openFurEditor(idx);
+  }
+
+  /** Background tincture for an image field (fills any transparent areas of the
+   *  art). A "none" chip keeps it transparent. */
+  private backgroundRow(parent: HTMLElement, field: Field): void {
+    const row = parent.createDiv({ cls: 'hw-field hw-field-swatches' });
+    row.createSpan({ cls: 'hw-field-label', text: 'Background' });
+    const sw = row.createDiv({ cls: 'hw-swatches' });
+    const mark = (el: HTMLElement): void => {
+      sw.querySelectorAll('.hw-swatch').forEach((e) => e.removeClass('is-selected'));
+      el.addClass('is-selected');
+    };
+    const none = sw.createEl('button', { cls: 'hw-swatch hw-swatch-reset', text: '\u2298' });
+    none.title = 'No background (transparent)';
+    none.setAttr('aria-label', 'No background');
+    if (!field.bg) none.addClass('is-selected');
+    none.onclick = () => { delete field.bg; mark(none); this.render(); };
+    for (const t of [...METALS, ...COLOURS] as Tincture[]) {
+      const b = sw.createEl('button', { cls: 'hw-swatch' });
+      b.style.background = hexOf(t);
+      b.title = labelOf(t);
+      b.setAttr('aria-label', labelOf(t));
+      if (field.bg === t) b.addClass('is-selected');
+      b.onclick = () => { field.bg = t; mark(b); this.render(); };
+    }
   }
 
   private openGuide(): void {
@@ -312,7 +502,7 @@ export class HeraldryWeaverView extends ItemView {
 
   /** Keep a created variant/custom fur in the swatch row for the session. */
   private rememberFur(t: Tincture): void {
-    if (furInfo(t) && !FIELD_TINCTURES.includes(t) && !this.customFurs.includes(t)) {
+    if ((furInfo(t) || isCustomFur(t)) && !FIELD_TINCTURES.includes(t) && !this.customFurs.includes(t)) {
       this.customFurs.push(t);
     }
   }
@@ -419,9 +609,10 @@ export class HeraldryWeaverView extends ItemView {
         // the grid never shows the same arms twice.
         const picked: { seed: string; spec: Spec }[] = [];
         const seen = new Set<string>();
+        const opts = this.genOptions();
         for (let guard = 0; picked.length < 9 && guard < 300; guard++) {
           const seed = randomSeed();
-          const spec = generate(seed);
+          const spec = generate(seed, opts);
           const key = toBlazon(spec);
           if (seen.has(key)) continue;
           seen.add(key);
@@ -450,52 +641,104 @@ export class HeraldryWeaverView extends ItemView {
     const panel = root.createDiv({ cls: 'hw-builder' });
     const f = this.spec.field;
 
-    this.selectRow(
+    this.groupedSelect(
       panel, 'Shield',
       SHIELDS.map((s) => [s, SHIELD_LABEL[s]] as [string, string]),
+      shieldAssetGroups(),
+      (id) => getShieldAsset(id)?.label ?? id,
       this.spec.shield,
       (v) => { this.spec.shield = v as ShieldShape; this.render(); },
     );
 
+    const fieldModes: [string, string][] = [['plain', 'Plain'], ['division', 'Divided'], ['variation', 'Variation']];
+    if (fieldAssetGroups().length) fieldModes.push(['image', 'Image']);
     this.selectRow(
-      panel, 'Field',
-      [['plain', 'Plain'], ['division', 'Divided'], ['variation', 'Variation']],
-      f.mode,
+      panel, 'Field', fieldModes, f.mode,
       (v) => { this.setFieldMode(v as FieldMode); this.render(); },
     );
 
-    this.fieldTinctureRow(panel, f.mode === 'plain' ? 'Tincture' : 'Tincture 1', 0);
-
-    if (f.mode !== 'plain') {
-      this.fieldTinctureRow(panel, 'Tincture 2', 1);
-      if (f.mode === 'division') {
-        this.selectRow(
-          panel, 'Division',
-          DIVISIONS.map((d) => [d, DIVISION_LABEL[d]] as [string, string]),
-          f.division ?? 'per-pale',
-          (v) => { this.spec.field.division = v as Division; this.render(); },
-        );
-      } else {
-        this.selectRow(
-          panel, 'Variation',
-          VARIATIONS.map((v) => [v, VARIATION_LABEL[v]] as [string, string]),
-          f.variation ?? 'barry',
-          (v) => { this.spec.field.variation = v as Variation; this.render(); },
-        );
+    if (f.mode === 'image') {
+      this.groupedSelect(
+        panel, 'Image', [], fieldAssetGroups(),
+        (id) => getFieldAsset(id)?.label ?? id,
+        f.image ?? '',
+        (v) => { this.spec.field.image = v; delete this.spec.field.colourMap; this.colourEdit = null; this.render(); },
+      );
+      this.sliderRow(
+        panel, 'Image size', f.scale ?? 1, 0.5, 2.5, 0.05,
+        (v) => `${v.toFixed(2)}\u00d7`,
+        (v) => { this.spec.field.scale = v; this.refreshPreview(); },
+      );
+      this.sliderRow(
+        panel, 'Offset X', f.offsetX ?? 0, -50, 50, 1,
+        (v) => (v === 0 ? 'centre' : `${v > 0 ? '+' : ''}${v}%`),
+        (v) => { this.spec.field.offsetX = v; this.refreshPreview(); },
+      );
+      this.sliderRow(
+        panel, 'Offset Y', f.offsetY ?? 0, -50, 50, 1,
+        (v) => (v === 0 ? 'centre' : `${v > 0 ? '+' : ''}${v}%`),
+        (v) => { this.spec.field.offsetY = v; this.refreshPreview(); },
+      );
+      this.backgroundRow(panel, this.spec.field);
+      this.colourEditor(panel, this.spec.field, (f.image ? getFieldAsset(f.image)?.palette : undefined) ?? [], 'field');
+      // When the art is flattened to a silhouette, expose the fill tincture.
+      if (this.spec.field.keepColour === false) {
+        this.fieldTinctureRow(panel, 'Tincture', 0);
+      }
+    } else {
+      this.fieldTinctureRow(panel, f.mode === 'plain' ? 'Tincture' : 'Tincture 1', 0);
+      if (f.mode !== 'plain') {
+        this.fieldTinctureRow(panel, 'Tincture 2', 1);
+        if (f.mode === 'division') {
+          this.selectRow(
+            panel, 'Division',
+            DIVISIONS.map((d) => [d, DIVISION_LABEL[d]] as [string, string]),
+            f.division ?? 'per-pale',
+            (v) => { this.spec.field.division = v as Division; this.render(); },
+          );
+        } else {
+          this.groupedSelect(
+            panel, 'Variation',
+            VARIATIONS.map((v) => [v, VARIATION_LABEL[v]] as [string, string]),
+            variationAssetGroups(),
+            (id) => getVariationAsset(id)?.label ?? id,
+            f.variation ?? 'barry',
+            (v) => { this.spec.field.variation = v as Variation; this.render(); },
+          );
+        }
       }
     }
 
-    this.selectRow(
+    this.groupedSelect(
       panel, 'Ordinary',
       [['', 'None'], ...ORDINARIES.map((o) => [o, ORDINARY_LABEL[o]] as [string, string])],
+      ordinaryAssetGroups(),
+      (id) => getOrdinaryAsset(id)?.singular ?? id,
       this.spec.ordinary?.type ?? '',
       (v) => { this.setOrdinary(v as OrdinaryType | ''); this.render(); },
     );
     if (this.spec.ordinary) {
-      this.swatchRow(
-        panel, 'Ordinary tincture', this.spec.ordinary.tincture,
-        (t) => { this.spec.ordinary!.tincture = t; this.render(); },
-      );
+      const o = this.spec.ordinary;
+      const importedOrd = isImportedOrdinary(o.type);
+      if (!importedOrd || !o.keepColour) {
+        this.swatchRow(
+          panel, 'Ordinary tincture', o.tincture,
+          (t) => { o.tincture = t; this.render(); },
+        );
+      }
+      if (importedOrd) {
+        this.colourEditor(panel, o, getOrdinaryAsset(o.type)?.palette ?? [], 'ord');
+        this.sliderRow(
+          panel, 'Ordinary size', o.scale ?? 1, 0.3, 2.5, 0.05,
+          (v) => `${v.toFixed(2)}\u00d7`,
+          (v) => { o.scale = v; this.refreshPreview(); },
+        );
+        this.sliderRow(
+          panel, 'Centre offset', o.offsetX ?? 0, -50, 50, 1,
+          (v) => (v === 0 ? 'centre' : `${v > 0 ? '+' : ''}${v}%`),
+          (v) => { o.offsetX = v; this.refreshPreview(); },
+        );
+      }
     }
 
     // Layered charges: each group is an independent card.
@@ -509,16 +752,21 @@ export class HeraldryWeaverView extends ItemView {
         this.render();
       };
 
-      this.selectRow(
-        card, 'Type',
-        listChargeIds().map((id) => [id, chargeLabel(id)] as [string, string]),
+      this.chargeTypeRow(
+        card,
         g.charge,
-        (v) => { g.charge = v; this.render(); },
+        (v) => { g.charge = v; delete g.colourMap; this.colourEdit = null; this.render(); },
       );
-      this.swatchRow(
-        card, 'Tincture', g.tincture,
-        (t) => { g.tincture = t; this.render(); },
-      );
+      // The single-tincture swatch only applies when the charge is being
+      // recoloured; for imported art kept in its own colours, the per-colour
+      // palette (below) governs instead, so drop the redundant row.
+      if (!isImported(g.charge) || !g.keepColour) {
+        this.swatchRow(
+          card, 'Tincture', g.tincture,
+          (t) => { g.tincture = t; this.render(); },
+        );
+      }
+      this.colourControls(card, g, i);
       this.positionGrid(
         card, positionOf(g),
         (p) => { g.position = p; this.render(); },
@@ -914,6 +1162,8 @@ class FurEditorModal extends Modal {
   private figure: Tincture;
   private preview?: HTMLElement;
   private label?: HTMLElement;
+  /** Recolour target for imported custom furs (null = original colours). */
+  private furTarget: Tincture | null = null;
 
   constructor(app: App, current: Tincture, private onPick: (fur: Tincture) => void) {
     super(app);
@@ -922,6 +1172,7 @@ class FurEditorModal extends Modal {
     this.counter = info.counter;
     this.base = info.base;
     this.figure = info.figure;
+    this.furTarget = parseCustomFur(current)?.target ?? null;
   }
 
   onOpen(): void {
@@ -938,6 +1189,43 @@ class FurEditorModal extends Modal {
       tile.appendChild(new DOMParser().parseFromString(furSwatchSvg(name), 'image/svg+xml').documentElement);
       cell.createDiv({ cls: 'hw-fur-name', text: labelOf(name) });
       cell.onclick = () => { this.onPick(name); this.close(); };
+    }
+
+    // --- imported custom furs (cover-filled semé sheets) ---
+    const furs = listCustomFurs();
+    if (furs.length) {
+      contentEl.createEl('div', { cls: 'hw-fur-section', text: 'Imported furs' });
+      const recolour = contentEl.createDiv({ cls: 'hw-field hw-field-swatches' });
+      recolour.createSpan({ cls: 'hw-field-label', text: 'Recolour' });
+      const rsw = recolour.createDiv({ cls: 'hw-swatches' });
+      const cells = contentEl.createDiv({ cls: 'hw-fur-presets' });
+      const drawCells = (): void => {
+        cells.empty();
+        for (const f of furs) {
+          const cell = cells.createDiv({ cls: 'hw-fur-cell' });
+          const tile = cell.createDiv({ cls: 'hw-fur-tile' });
+          const fur = makeCustomFur(f.id, this.furTarget ?? undefined);
+          tile.appendChild(new DOMParser().parseFromString(furSwatchSvg(fur), 'image/svg+xml').documentElement);
+          cell.createDiv({ cls: 'hw-fur-name', text: f.label });
+          cell.onclick = () => { this.onPick(fur); this.close(); };
+        }
+      };
+      const mark = (el: HTMLElement): void => {
+        rsw.querySelectorAll('.hw-swatch').forEach((e) => e.removeClass('is-selected'));
+        el.addClass('is-selected');
+      };
+      const orig = rsw.createEl('button', { cls: 'hw-swatch hw-swatch-reset', text: '\u21ba' });
+      orig.title = 'Original colours';
+      if (!this.furTarget) orig.addClass('is-selected');
+      orig.onclick = () => { this.furTarget = null; mark(orig); drawCells(); };
+      for (const t of [...METALS, ...COLOURS] as Tincture[]) {
+        const b = rsw.createEl('button', { cls: 'hw-swatch' });
+        b.style.background = hexOf(t);
+        b.title = labelOf(t);
+        if (this.furTarget === t) b.addClass('is-selected');
+        b.onclick = () => { this.furTarget = t; mark(b); drawCells(); };
+      }
+      drawCells();
     }
 
     // --- custom builder ---

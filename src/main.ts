@@ -6,6 +6,16 @@ import { toBlazon } from './engine/blazon';
 import { renderSvg } from './engine/render';
 import { generateArms } from './engine/index';
 import { chargeFromSvg } from './engine/importCharge';
+import { wmfToSvg } from './engine/wmf';
+import {
+  clearAllAssets,
+  ordinaryFromSvg, registerOrdinaryAsset,
+  shieldFromSvg, registerShieldAsset,
+  fieldFromSvg, registerFieldAsset,
+  variationFromSvg, registerVariationAsset,
+  furFromSvg,
+} from './engine/assets';
+import { registerCustomFur, clearCustomFurs } from './engine/tinctures';
 import {
   registerCharge,
   clearImportedCharges,
@@ -64,6 +74,9 @@ interface BlockParams {
 }
 
 let uidCounter = 0;
+
+/** Reserved type-subfolders scanned under the asset root, one per element. */
+export const RESERVED_ASSET_FOLDERS = ['charges', 'ordinaries', 'shields', 'fields', 'variations', 'furs'] as const;
 
 export default class HeraldryWeaverPlugin extends Plugin {
   settings: HeraldrySettings = { ...DEFAULT_SETTINGS };
@@ -148,10 +161,10 @@ export default class HeraldryWeaverPlugin extends Plugin {
 
     this.addCommand({
       id: 'reload-custom-charges',
-      name: 'Reload custom charges',
+      name: 'Reload custom assets',
       callback: async () => {
         await this.loadCustomCharges();
-        new Notice(`Loaded ${this.importedCharges.length} custom charge(s).`);
+        new Notice(`Loaded ${this.importedCharges.length} custom asset(s).`);
         this.refreshViews();
       },
     });
@@ -203,35 +216,150 @@ export default class HeraldryWeaverPlugin extends Plugin {
     }
   }
 
-  /** Scan the configured vault folder for .svg files and register them as charges. */
+  /**
+   * Scan the asset root's reserved type-subfolders (charges/, ordinaries/,
+   * shields/, fields/, variations/) for .svg and .wmf files and register each
+   * as the matching element. Within a type folder, nested subfolders become
+   * picker categories. Falls back to migrating the old chargeFolder setting.
+   */
   async loadCustomCharges(): Promise<void> {
     clearImportedCharges();
+    clearAllAssets();
+    clearCustomFurs();
     this.importedCharges = [];
-    const folder = this.settings.chargeFolder?.trim();
-    if (!folder) return;
     const adapter = this.app.vault.adapter;
-    try {
-      if (!(await adapter.exists(folder))) return;
-      const listing = await adapter.list(folder);
-      for (const file of listing.files) {
-        if (!file.toLowerCase().endsWith('.svg')) continue;
-        const base = (file.split('/').pop() ?? file).replace(/\.svg$/i, '');
-        try {
-          const svg = await adapter.read(file);
-          registerCharge(
-            chargeFromSvg(base, svg, {
-              recolor: this.settings.recolorImports,
-              label: base,
-            }),
-          );
-          this.importedCharges.push(base);
-        } catch {
-          // skip unreadable / malformed file
-        }
-      }
-    } catch {
-      // folder missing or not listable — leave imported set empty
+
+    let root = this.settings.assetFolder?.trim();
+    if (!root) {
+      const cf = this.settings.chargeFolder?.trim() ?? '';
+      root = cf.replace(/\/charges\/?$/i, '') || cf;
     }
+    if (!root) return;
+    const rootNorm = root.replace(/\/+$/, '');
+
+    const usedIds = new Set<string>();
+    const uniqueId = (prefix: string, rel: string): string => {
+      const slug = `${prefix}-${rel}`
+        .replace(/\.(svg|wmf)$/i, '')
+        .replace(/[^A-Za-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase() || 'item';
+      let id = slug;
+      let n = 2;
+      while (usedIds.has(id)) id = `${slug}-${n++}`;
+      usedIds.add(id);
+      return id;
+    };
+
+    const loadSvg = async (path: string): Promise<string | null> => {
+      try {
+        if (/\.wmf$/i.test(path)) return wmfToSvg(await adapter.readBinary(path));
+        return await adapter.read(path);
+      } catch {
+        return null;
+      }
+    };
+
+    const scanType = async (
+      sub: string,
+      handler: (id: string, svg: string, base: string, category: string) => void,
+    ): Promise<void> => {
+      const typeRoot = `${rootNorm}/${sub}`;
+      try {
+        if (!(await adapter.exists(typeRoot))) return;
+      } catch {
+        return;
+      }
+      const found: { path: string; category: string }[] = [];
+      const walk = async (dir: string, depth: number): Promise<void> => {
+        if (depth > 10 || found.length > 5000) return;
+        let listing: { files: string[]; folders: string[] };
+        try {
+          listing = await adapter.list(dir);
+        } catch {
+          return;
+        }
+        for (const file of listing.files) {
+          if (!/\.(svg|wmf)$/i.test(file)) continue;
+          const rel = file.startsWith(typeRoot + '/') ? file.slice(typeRoot.length + 1) : file;
+          const slash = rel.lastIndexOf('/');
+          found.push({ path: file, category: slash >= 0 ? rel.slice(0, slash) : '' });
+        }
+        for (const f of listing.folders) await walk(f, depth + 1);
+      };
+      await walk(typeRoot, 0);
+      for (const { path, category } of found) {
+        const name = path.split('/').pop() ?? path;
+        const base = name.replace(/\.(svg|wmf)$/i, '');
+        const rel = path.startsWith(typeRoot + '/') ? path.slice(typeRoot.length + 1) : name;
+        const svg = await loadSvg(path);
+        if (!svg) continue;
+        handler(uniqueId(sub, rel), svg, base, category);
+      }
+    };
+
+    try {
+      if (!(await adapter.exists(rootNorm))) return;
+    } catch {
+      return;
+    }
+
+    const recolor = this.settings.recolorImports;
+    await scanType('charges', (id, svg, base, category) => {
+      registerCharge(chargeFromSvg(id, svg, { recolor, label: base, category }));
+      this.importedCharges.push(id);
+    });
+    await scanType('ordinaries', (id, svg, base, category) => {
+      registerOrdinaryAsset(ordinaryFromSvg(id, svg, { recolor, label: base, category }));
+      this.importedCharges.push(id);
+    });
+    await scanType('shields', (id, svg, base, category) => {
+      const s = shieldFromSvg(id, svg, { label: base, category });
+      if (s) {
+        registerShieldAsset(s);
+        this.importedCharges.push(id);
+      }
+    });
+    await scanType('fields', (id, svg, base, category) => {
+      registerFieldAsset(fieldFromSvg(id, svg, { label: base, category }));
+      this.importedCharges.push(id);
+    });
+    await scanType('variations', (id, svg, base, category) => {
+      registerVariationAsset(variationFromSvg(id, svg, { label: base, category }));
+      this.importedCharges.push(id);
+    });
+    await scanType('furs', (id, svg, base, category) => {
+      registerCustomFur(furFromSvg(id, svg, { label: base, category }));
+      this.importedCharges.push(id);
+    });
+  }
+
+  /**
+   * Create the asset root (if needed) and its reserved type-subfolders. Returns
+   * how many were newly created vs already present so the caller can report.
+   */
+  async createAssetFolders(): Promise<{ created: number; existing: number; root: string }> {
+    const root = this.settings.assetFolder?.trim().replace(/\/+$/, '');
+    if (!root) return { created: 0, existing: 0, root: '' };
+    const adapter = this.app.vault.adapter;
+    let created = 0;
+    let existing = 0;
+    const ensure = async (path: string, count: boolean): Promise<void> => {
+      try {
+        if (await adapter.exists(path)) {
+          if (count) existing++;
+          return;
+        }
+        await this.app.vault.createFolder(path);
+        if (count) created++;
+      } catch {
+        // ignore (e.g. created concurrently); treat as present
+        if (count) existing++;
+      }
+    };
+    await ensure(root, false);
+    for (const sub of RESERVED_ASSET_FOLDERS) await ensure(`${root}/${sub}`, true);
+    return { created, existing, root };
   }
 
   refreshViews(): void {

@@ -14,8 +14,14 @@ export interface ChargeDef {
   plural: string;
   /** Indefinite article for a single instance: "a" or "an". */
   article: 'a' | 'an';
-  /** SVG markup inside a 100x100 viewBox, given a fill colour. */
-  render: (fill: string) => string;
+  /** SVG markup inside a 100x100 viewBox, given a fill colour. For imported
+   *  charges that carry their own colours, `opts.keepColour` renders in those
+   *  original colours; `opts.colourMap` remaps individual original colours. */
+  render: (fill: string, opts?: { keepColour?: boolean; colourMap?: Record<string, string> }) => string;
+  /** Optional grouping label for the picker (e.g. an imported subfolder path). */
+  category?: string;
+  /** Distinct original colours in imported art, for per-colour recolouring. */
+  palette?: string[];
 }
 
 const star5 = (fill: string): string =>
@@ -167,4 +173,36 @@ export function listChargeIds(): string[] {
 /** Pack charge ids currently registered (empty when the pack is disabled). */
 export function listBundledChargeIds(): string[] {
   return Object.keys(bundled);
+}
+
+/** Ids of user-imported charges (excludes built-ins and the pack). */
+export function listImportedChargeIds(): string[] {
+  return Object.keys(imported);
+}
+
+/**
+ * Charge ids organised into labelled groups for the builder's picker:
+ * built-ins first, then the bundled pack, then imported charges grouped by
+ * their category (an imported charge's subfolder path, or "Imported" at root).
+ * Imported categories are sorted so nested paths read in a stable order.
+ */
+export function chargeGroups(): { label: string; ids: string[] }[] {
+  const out: { label: string; ids: string[] }[] = [];
+  const builtin = Object.keys(CHARGES);
+  if (builtin.length) out.push({ label: 'Built-in', ids: builtin });
+  const pack = Object.keys(bundled);
+  if (pack.length) out.push({ label: 'Pack', ids: pack });
+
+  const byCat = new Map<string, string[]>();
+  for (const id of Object.keys(imported)) {
+    const raw = imported[id].category?.trim();
+    const cat = raw && raw.length ? raw : 'Imported';
+    const arr = byCat.get(cat);
+    if (arr) arr.push(id);
+    else byCat.set(cat, [id]);
+  }
+  for (const cat of [...byCat.keys()].sort((a, b) => a.localeCompare(b))) {
+    out.push({ label: cat, ids: byCat.get(cat)! });
+  }
+  return out;
 }

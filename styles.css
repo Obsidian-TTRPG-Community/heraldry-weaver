@@ -274,10 +274,13 @@
 .hw-charge-card {
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   background: var(--background-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
-.hw-charge-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.hw-charge-head { display: flex; align-items: center; justify-content: space-between; }
 .hw-charge-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .hw-charge-remove {
   border: none; background: transparent; color: var(--text-muted);
@@ -329,6 +332,32 @@
 }
 .hw-toggle:hover { border-color: var(--interactive-accent); }
 .hw-toggle.is-selected { border-color: var(--interactive-accent); background: var(--interactive-accent); color: var(--text-on-accent); }
+
+/* Text pill toggle (e.g. "Original colours") — sizes to its label */
+.hw-pill {
+  padding: 4px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 0.82em;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hw-pill:hover { border-color: var(--interactive-accent); }
+.hw-pill.is-selected { border-color: var(--interactive-accent); background: var(--interactive-accent); color: var(--text-on-accent); }
+
+/* Per-colour recolour palette */
+.hw-swatch.is-mapped { outline: 2px dashed var(--interactive-accent); outline-offset: 1px; }
+.hw-swatch-reset {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.75);
+}
+.hw-colour-editor {
+  border-top: 1px dashed var(--background-modifier-border);
+  padding-top: 8px;
+}
 
 /* Saved-arms browser modal */
 .hw-browse-all { margin-top: 8px; width: 100%; }

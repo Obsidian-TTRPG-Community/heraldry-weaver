@@ -95,7 +95,46 @@ export function matchPreset(info: FurInfo): NamedFur | null {
 }
 
 export function isFur(t: Tincture): boolean {
-  return furInfo(t) !== null;
+  return furInfo(t) !== null || isCustomFur(t);
+}
+
+// --- custom (imported) furs ---------------------------------------------------
+// A pre-tiled semé/diaper sheet imported by the user, used as a tincture and
+// rendered by cover-fill. Encoded as `cfur:<id>` or `cfur:<id>:<targetTincture>`
+// (the latter recolours all the art's ink to the target). The registry lives
+// here, the lowest layer, so tincture helpers resolve them without import cycles.
+
+export interface CustomFur {
+  id: string;
+  label: string;
+  category?: string;
+  inner: string;
+  w: number;
+  h: number;
+  palette: string[];
+}
+
+const customFurReg: Record<string, CustomFur> = {};
+export function registerCustomFur(f: CustomFur): void { customFurReg[f.id] = f; }
+export function clearCustomFurs(): void { for (const k of Object.keys(customFurReg)) delete customFurReg[k]; }
+export function getCustomFur(id: string): CustomFur | undefined { return customFurReg[id]; }
+export function listCustomFurs(): CustomFur[] { return Object.values(customFurReg); }
+
+export function isCustomFur(t: Tincture): boolean {
+  return typeof t === 'string' && t.startsWith('cfur:');
+}
+
+/** Resolve a `cfur:` tincture to its definition (+ optional recolour target). */
+export function parseCustomFur(t: Tincture): { def: CustomFur; target?: Tincture } | null {
+  if (!isCustomFur(t)) return null;
+  const parts = (t as string).split(':'); // cfur : id [ : target ]
+  const def = customFurReg[parts[1]];
+  if (!def) return null;
+  return { def, target: parts[2] ? (parts[2] as Tincture) : undefined };
+}
+
+export function makeCustomFur(id: string, target?: Tincture): Tincture {
+  return (target ? `cfur:${id}:${target}` : `cfur:${id}`) as Tincture;
 }
 
 export function tinctureClass(t: Tincture): TinctureClass {
@@ -109,6 +148,8 @@ export function hexOf(t: Tincture): string {
   if (solid) return solid;
   const f = furInfo(t);
   if (f) return SOLID_HEX[f.base] ?? '#888888';
+  const cf = parseCustomFur(t);
+  if (cf) return cf.target ? ((SOLID_HEX as Record<string, string>)[cf.target] ?? '#888888') : (cf.def.palette[0] ?? '#888888');
   return '#888888';
 }
 
@@ -128,6 +169,8 @@ export function labelOf(t: Tincture): string {
     const prefix = f.counter ? 'Counter-' : '';
     return `${prefix}${head}${stem} ${base} and ${fig}`;
   }
+  const cf = parseCustomFur(t);
+  if (cf) return cf.target ? `${cf.def.label} ${(SOLID_LABEL as Record<string, string>)[cf.target] ?? cf.target}` : cf.def.label;
   return String(t);
 }
 

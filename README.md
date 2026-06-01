@@ -169,22 +169,55 @@ hw.setNameProvider(async () => (await app.plugins.plugins["randomness"].api.roll
 A provider is a live function, so it isn't persisted — re-register it on load if
 you want it permanent.
 
-## Custom charges (import)
+## Custom assets (import)
 
-Heraldry Weaver ships with a **bundled charge pack** — ~28 fantasy charges (lion,
+Heraldry Weaver reads standard **SVG** and **WMF** vector art, so it works with
+commercial heraldic art packs such as **[heraldryclipart.com](https://www.heraldryclipart.com/)**.
+**No third-party artwork ships with the plugin** — it stays free of bundled
+assets — but anything you purchase there (or any SVG/WMF you already own) drops
+straight in. WMF is the vector format those sites provide; EPS isn't supported,
+but their assets ship a WMF twin.
+
+### Where files go
+
+Set an **asset folder** in **Settings → Custom assets** (default `Heraldry
+Weaver`). Inside it, six **reserved subfolders** each map to one element type:
+
+| Subfolder | Holds |
+|---|---|
+| `charges/` | individual charges (lions, crosses, stars…) |
+| `ordinaries/` | fesses, bends, chevrons, saltires… |
+| `shields/` | escutcheon outlines |
+| `fields/` | background images / full field art |
+| `variations/` | tiling field patterns |
+| `furs/` | semé / fur sheets used as recolourable tinctures |
+
+Click **Create subfolders** in settings to make them all at once, drop your
+files into the matching folder, then run **Reload custom assets** (command or
+the settings button). Each file appears in the relevant picker by filename, and
+**nested folders** within any reserved subfolder become categories in that
+picker.
+
+### Colours & rolls
+
+Imported **charges** and **ordinaries** are silhouette-recoloured to the chosen
+tincture by default; turn *Recolour imported charges* off, or use the per-item
+**Original colours** toggle and per-colour remap to keep or recolour the art's
+own palette. **Image fields** add a background-tincture control, **size and
+X/Y offset** sliders to fine-tune the fit (useful when the art's shape doesn't
+match the shield), plus the same colour editor, and **furs** are recolourable
+tinctures usable on fields and divisions. By default custom content is **excluded from random rolls** to keep
+generation's curated look — switch on **Include custom content in rolls** to let
+the dice draw from everything in your reserved folders.
+
+### Bundled charge pack
+
+Separately, an optional **bundled charge pack** — ~28 fantasy charges (lion,
 eagle, wolf, dragon, castle, ship, crown, and more) from
 [game-icons.net](https://game-icons.net) under CC BY 3.0, recoloured to the
-chosen tincture. They appear in the Build mode Charge dropdown out of the box;
-toggle the pack off in settings if you only want your own. See `CREDITS.md` for
-attribution.
-
-To add your own, drop `.svg` files into the vault folder set in **Settings →
-Custom charges** (default `Heraldry Weaver/charges/`) and reload them (command
-*Reload custom charges* or the settings button). They appear in the Charge
-dropdown by filename. By default each is treated as a silhouette and recoloured
-to the chosen tincture; turn recolouring off to keep an SVG's own colours.
-Bundled and imported charges are available in the builder but excluded from
-random rolls, so generation keeps its curated look.
+chosen tincture — ships with the plugin and appears in the Build mode Charge
+dropdown out of the box. Toggle the pack off in settings if you only want your
+own. See `CREDITS.md` for attribution.
 
 ### Charge packs and attribution
 

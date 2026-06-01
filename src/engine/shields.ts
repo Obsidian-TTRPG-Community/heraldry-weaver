@@ -1,4 +1,4 @@
-import type { ShieldShape } from './types';
+import type { ShieldShape, BuiltinShield } from './types';
 
 // Canonical render space. All field/ordinary/charge geometry is expressed in
 // this box; the renderer scales the whole SVG via viewBox.
@@ -16,7 +16,7 @@ const LOZENGE = 'M100 14 L184 115 L100 216 L16 115 Z';
 const ROUND =
   'M100 16 C158 16 184 64 184 115 C184 172 148 214 100 214 C52 214 16 172 16 115 C16 64 42 16 100 16 Z';
 
-const PATHS: Record<ShieldShape, string> = {
+const PATHS: Record<BuiltinShield, string> = {
   heater: HEATER,
   french: FRENCH,
   spanish: SPANISH,
@@ -24,6 +24,14 @@ const PATHS: Record<ShieldShape, string> = {
   round: ROUND,
 };
 
+export const BUILTIN_SHIELDS: BuiltinShield[] = ['heater', 'french', 'spanish', 'lozenge', 'round'];
+
+/** Built-in shield outline path, or null for an imported/unknown shape (the
+ *  renderer resolves imported escutcheons separately). */
+export function builtinShieldPath(shape: ShieldShape): string | null {
+  return PATHS[shape as BuiltinShield] ?? null;
+}
+
 export function shieldPath(shape: ShieldShape): string {
-  return PATHS[shape] ?? HEATER;
+  return PATHS[shape as BuiltinShield] ?? HEATER;
 }
