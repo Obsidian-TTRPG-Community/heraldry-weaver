@@ -227,3 +227,17 @@ test('image field scale + offset emit a transform around the field-box centre', 
   assert.ok(!/scale\(1\.3\)/.test(plain), 'no grow transform at defaults');
   clearFieldAssets();
 });
+
+test('charge rotation emits a rotate about the charge centre', () => {
+  const spec = { shield: 'heater', field: { mode: 'plain', tinctures: ['or'] }, charges: [{ charge: 'mullet', tincture: 'sable', count: 1, arrangement: 'one', rotate: 45 }] };
+  const svg = renderSvg(spec as any, { uid: 'r' });
+  assert.match(svg, /rotate\(45 /);
+  const none = renderSvg({ ...spec, charges: [{ charge: 'mullet', tincture: 'sable', count: 1, arrangement: 'one' }] } as any, { uid: 'r' });
+  assert.ok(!/rotate\(/.test(none), 'no rotate at default');
+});
+
+test('charge rotation combines with mirroring', () => {
+  const svg = renderSvg({ shield: 'heater', field: { mode: 'plain', tinctures: ['or'] }, charges: [{ charge: 'mullet', tincture: 'sable', count: 1, arrangement: 'one', rotate: 90, flipX: true }] } as any, { uid: 'r' });
+  assert.match(svg, /rotate\(90 /);
+  assert.match(svg, /scale\(-/); // mirror still applied
+});

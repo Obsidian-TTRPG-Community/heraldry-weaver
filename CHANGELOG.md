@@ -3,6 +3,15 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-06-03
+
+### Added
+
+- **Charge rotation** — each charge group has a **rotation** slider (±180°),
+  spinning charges about their own centre. Combines with scale and horizontal/
+  vertical mirroring; positions and arrangement are preserved. Random rolls keep
+  charges upright. Round-trips through saved arms and config strings.
+
 ## [1.2.0] - 2026-06-01
 
 A large update centred on **bringing your own artwork in**. Heraldry Weaver now
@@ -73,6 +82,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.3.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.3.0
 [1.2.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.2.0
 [1.1.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.1.0
 [1.0.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.0.0

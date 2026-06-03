@@ -439,10 +439,13 @@ function chargeGroupMarkup(g: ChargeGroup): string {
     .slice(0, g.count)
     .map((p) => {
       const scale = (p.size * mult) / 100;
+      // Rotate each charge about its own centre (p.x, p.y), applied before the
+      // placement so the centre stays put regardless of mirroring.
+      const rot = g.rotate ? `rotate(${n(g.rotate)} ${n(p.x)} ${n(p.y)}) ` : '';
       if (!g.flipX && !g.flipY) {
         const tx = p.x - 50 * scale;
         const ty = p.y - 50 * scale;
-        return `<g transform="translate(${n(tx)},${n(ty)}) scale(${n(scale)})">${inner}</g>`;
+        return `<g transform="${rot}translate(${n(tx)},${n(ty)}) scale(${n(scale)})">${inner}</g>`;
       }
       // Mirror about the charge centre by negating the axis scale and shifting
       // the origin to the opposite edge, so the centre stays put.
@@ -450,7 +453,7 @@ function chargeGroupMarkup(g: ChargeGroup): string {
       const sy = (g.flipY ? -1 : 1) * scale;
       const tx = p.x - 50 * sx;
       const ty = p.y - 50 * sy;
-      return `<g transform="translate(${n(tx)},${n(ty)}) scale(${n(sx)},${n(sy)})">${inner}</g>`;
+      return `<g transform="${rot}translate(${n(tx)},${n(ty)}) scale(${n(sx)},${n(sy)})">${inner}</g>`;
     })
     .join('');
 }

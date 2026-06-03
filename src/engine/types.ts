@@ -110,6 +110,8 @@ export interface ChargeGroup {
   flipX?: boolean;
   /** Flip the charge vertically (inverted). */
   flipY?: boolean;
+  /** Rotate each charge about its own centre, in degrees clockwise (default 0). */
+  rotate?: number;
   /** For imported charges that carry their own colours: render in those
    *  original colours ("proper") rather than recolouring to `tincture`. */
   keepColour?: boolean;

@@ -792,6 +792,12 @@ export class HeraldryWeaverView extends ItemView {
         (v) => { g.scale = v; this.refreshPreview(); },
       );
 
+      this.sliderRow(
+        card, 'Rotation', g.rotate ?? 0, -180, 180, 5,
+        (v) => (v === 0 ? '0\u00b0' : `${v > 0 ? '+' : ''}${v}\u00b0`),
+        (v) => { g.rotate = v; this.refreshPreview(); },
+      );
+
       const mirror = card.createDiv({ cls: 'hw-field' });
       mirror.createSpan({ cls: 'hw-field-label', text: 'Mirror' });
       const toggles = mirror.createDiv({ cls: 'hw-toggles' });

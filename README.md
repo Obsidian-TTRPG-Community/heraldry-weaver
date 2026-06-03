@@ -15,7 +15,7 @@ Weaver panel**. The panel has two modes:
   / round), field (plain / divided / variation) with metal, colour, and **fur**
   tinctures — the eight standard furs plus custom recoloured furs via the fur
   editor — an ordinary, and **layered charge groups**: add several charges, each
-  with its own tincture, count, arrangement, 3×3 position, scale, and
+  with its own tincture, count, arrangement, 3×3 position, scale, rotation, and
   horizontal/vertical mirroring. Live preview with a rule-of-tincture hint.
 
 Shared actions: **Save** (to the in-plugin library), **Copy reference**,
