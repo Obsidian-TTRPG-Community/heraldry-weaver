@@ -25,9 +25,10 @@ import {
 } from './engine/options';
 import type {
   Spec, Tincture, FieldMode, Division, Variation, OrdinaryType, Arrangement,
-  ShieldShape, Position, ChargeGroup, FurPattern, Field,
+  ShieldShape, Position, ChargeGroup, FurPattern, Field, FlagShape,
 } from './engine/types';
 import { downloadSvg, exportPng, safeFilename } from './export';
+import { FLAG_SHAPES, FLAG_LABEL } from './engine/frames';
 import { HeraldryGuideModal } from './guideModal';
 import type HeraldryWeaverPlugin from './main';
 
@@ -217,6 +218,11 @@ export class HeraldryWeaverView extends ItemView {
 
   private removeCharge(i: number): void {
     this.spec.charges.splice(i, 1);
+  }
+
+  private setFormat(fmt: 'shield' | 'flag'): void {
+    this.spec.format = fmt;
+    if (fmt === 'flag' && !this.spec.flag) this.spec.flag = 'flag';
   }
 
   private setChargeCount(g: ChargeGroup, count: number): void {
@@ -641,14 +647,29 @@ export class HeraldryWeaverView extends ItemView {
     const panel = root.createDiv({ cls: 'hw-builder' });
     const f = this.spec.field;
 
-    this.groupedSelect(
-      panel, 'Shield',
-      SHIELDS.map((s) => [s, SHIELD_LABEL[s]] as [string, string]),
-      shieldAssetGroups(),
-      (id) => getShieldAsset(id)?.label ?? id,
-      this.spec.shield,
-      (v) => { this.spec.shield = v as ShieldShape; this.render(); },
+    const format = this.spec.format ?? 'shield';
+    this.selectRow(
+      panel, 'Format', [['shield', 'Shield'], ['flag', 'Flag']], format,
+      (v) => { this.setFormat(v as 'shield' | 'flag'); this.render(); },
     );
+
+    if (format === 'flag') {
+      this.selectRow(
+        panel, 'Flag shape',
+        FLAG_SHAPES.map((s) => [s, FLAG_LABEL[s]] as [string, string]),
+        this.spec.flag ?? 'flag',
+        (v) => { this.spec.flag = v as FlagShape; this.render(); },
+      );
+    } else {
+      this.groupedSelect(
+        panel, 'Shield',
+        SHIELDS.map((s) => [s, SHIELD_LABEL[s]] as [string, string]),
+        shieldAssetGroups(),
+        (id) => getShieldAsset(id)?.label ?? id,
+        this.spec.shield,
+        (v) => { this.spec.shield = v as ShieldShape; this.render(); },
+      );
+    }
 
     const fieldModes: [string, string][] = [['plain', 'Plain'], ['division', 'Divided'], ['variation', 'Variation']];
     if (fieldAssetGroups().length) fieldModes.push(['image', 'Image']);

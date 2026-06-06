@@ -1,4 +1,5 @@
 import { shieldPath, builtinShieldPath, SHIELD_W, SHIELD_H, FIELD_BOUNDS } from './shields';
+import { flagFrame, type FlagFrame } from './frames';
 import {
   getOrdinaryAsset,
   getShieldAsset,
@@ -428,13 +429,57 @@ function chargePositions(count: number, arrangement: Arrangement, position: Posi
   return rowAround(a.x, a.y, count, 48);
 }
 
-function chargeGroupMarkup(g: ChargeGroup): string {
+/** Charge layout for flags: centred and spread to fill the (w, h) rectangle,
+ *  sized to the flag's height. Kept separate from the shield layout so charges
+ *  stay undistorted while the field/ordinary scale to the flag. */
+function flagChargePositions(count: number, arrangement: Arrangement, position: Position, w: number, h: number): Pos[] {
+  const cx = w / 2;
+  const cy = h / 2;
+  if (position === 'center') {
+    if (count === 1 || arrangement === 'one') return [{ x: cx, y: cy, size: h * 0.52 }];
+    if (arrangement === 'in-pale')
+      return [
+        { x: cx, y: cy - h * 0.22, size: h * 0.38 },
+        { x: cx, y: cy + h * 0.22, size: h * 0.38 },
+      ];
+    if (arrangement === 'in-fess')
+      return [
+        { x: cx - w * 0.18, y: cy, size: h * 0.4 },
+        { x: cx + w * 0.18, y: cy, size: h * 0.4 },
+      ];
+    return [
+      { x: cx - w * 0.16, y: cy - h * 0.16, size: h * 0.34 },
+      { x: cx + w * 0.16, y: cy - h * 0.16, size: h * 0.34 },
+      { x: cx, y: cy + h * 0.2, size: h * 0.34 },
+    ];
+  }
+  const frac: Record<Position, [number, number]> = {
+    'top-left': [0.28, 0.28], top: [0.5, 0.26], 'top-right': [0.72, 0.28],
+    left: [0.26, 0.5], center: [0.5, 0.5], right: [0.74, 0.5],
+    'bottom-left': [0.28, 0.72], bottom: [0.5, 0.74], 'bottom-right': [0.72, 0.72],
+  };
+  const [fx, fy] = frac[position];
+  const ax = fx * w;
+  const ay = fy * h;
+  const s = h * 0.3;
+  if (count <= 1) return [{ x: ax, y: ay, size: s }];
+  if (count === 2) return [{ x: ax - w * 0.08, y: ay, size: s - 6 }, { x: ax + w * 0.08, y: ay, size: s - 6 }];
+  return [
+    { x: ax - w * 0.1, y: ay, size: s - 12 },
+    { x: ax, y: ay, size: s - 12 },
+    { x: ax + w * 0.1, y: ay, size: s - 12 },
+  ];
+}
+
+function chargeGroupMarkup(g: ChargeGroup, flag: FlagFrame | null): string {
   const def = getCharge(g.charge);
   if (!def) return '';
   const fill = hexOf(g.tincture);
   const inner = def.render(fill, { keepColour: g.keepColour, colourMap: g.colourMap });
   const mult = g.scale && g.scale > 0 ? g.scale : 1;
-  const positions = chargePositions(g.count, g.arrangement, positionOf(g));
+  const positions = flag
+    ? flagChargePositions(g.count, g.arrangement, positionOf(g), flag.w, flag.h)
+    : chargePositions(g.count, g.arrangement, positionOf(g));
   return positions
     .slice(0, g.count)
     .map((p) => {
@@ -471,43 +516,58 @@ export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
   const safe = `${safeId(opts.uid ?? 'hw')}-${counter++}`;
   const clipId = `hw-clip-${safe}`;
 
-  // Resolve the escutcheon: a built-in path, or an imported outline fitted to
-  // the field box (used for both the clip region and the border stroke).
+  const isFlag = spec.format === 'flag';
+  const frame = isFlag ? flagFrame(spec.flag ?? 'flag') : null;
+  const W = frame ? frame.w : SHIELD_W;
+  const H = frame ? frame.h : SHIELD_H;
+
+  // Resolve the outline (clip region + border stroke).
   let clipChild: string;
   let border: string;
-  const builtin = builtinShieldPath(spec.shield);
-  if (builtin) {
-    clipChild = `<path d="${builtin}"/>`;
-    border = `<path d="${builtin}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+  if (frame) {
+    clipChild = `<path d="${frame.clip}"/>`;
+    border = `<path d="${frame.clip}" fill="none" stroke="${outline}" stroke-width="2"/>`;
   } else {
-    const sh = getShieldAsset(spec.shield);
-    const box = {
-      x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
-      w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
-    };
-    if (sh) {
-      const t = fitTransform({ x: 0, y: 0, w: sh.w, h: sh.h }, box, 'contain');
-      clipChild = `<path d="${sh.d}" transform="${t}"/>`;
-      border = `<path d="${sh.d}" transform="${t}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+    const builtin = builtinShieldPath(spec.shield);
+    if (builtin) {
+      clipChild = `<path d="${builtin}"/>`;
+      border = `<path d="${builtin}" fill="none" stroke="${outline}" stroke-width="2"/>`;
     } else {
-      const h = shieldPath('heater');
-      clipChild = `<path d="${h}"/>`;
-      border = `<path d="${h}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+      const sh = getShieldAsset(spec.shield);
+      const box = {
+        x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
+        w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
+      };
+      if (sh) {
+        const t = fitTransform({ x: 0, y: 0, w: sh.w, h: sh.h }, box, 'contain');
+        clipChild = `<path d="${sh.d}" transform="${t}"/>`;
+        border = `<path d="${sh.d}" transform="${t}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+      } else {
+        const h = shieldPath('heater');
+        clipChild = `<path d="${h}"/>`;
+        border = `<path d="${h}" fill="none" stroke="${outline}" stroke-width="2"/>`;
+      }
     }
   }
   const defs: Defs = { uid: safe, patterns: new Map() };
 
-  const clipped = fieldMarkup(spec.field, defs) +
+  const inner = fieldMarkup(spec.field, defs) +
     (spec.ordinary ? ordinaryMarkup(spec.ordinary) : '');
+  // The field+ordinary are authored in 200x230 design space; for a flag we
+  // scale that composition into the frame (full-width fess, corner-to-corner
+  // saltire, etc.). Shields render it 1:1.
+  const clipped = frame
+    ? `<g transform="scale(${n(W / SHIELD_W)} ${n(H / SHIELD_H)})">${inner}</g>`
+    : inner;
 
   // Charges are sized to sit inside the field, so they are not clipped (keeps
-  // their outlines crisp at the shield edge).
-  const charges = spec.charges.map(chargeGroupMarkup).join('');
+  // their outlines crisp at the edge) and are placed undistorted.
+  const charges = spec.charges.map((g) => chargeGroupMarkup(g, frame)).join('');
 
   const patternDefs = [...defs.patterns.values()].join('');
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHIELD_W} ${SHIELD_H}" role="img">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img">` +
     `<defs><clipPath id="${clipId}">${clipChild}</clipPath>${patternDefs}</defs>` +
     `<g clip-path="url(#${clipId})">${clipped}</g>` +
     charges +

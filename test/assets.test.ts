@@ -241,3 +241,22 @@ test('charge rotation combines with mirroring', () => {
   assert.match(svg, /rotate\(90 /);
   assert.match(svg, /scale\(-/); // mirror still applied
 });
+
+test('flag formats use their own canvas dimensions', () => {
+  const base = { shield: 'heater', field: { mode: 'plain', tinctures: ['azure'] }, charges: [] };
+  assert.match(renderSvg({ ...base, format: 'flag', flag: 'flag' } as any, { uid: 'f' }), /viewBox="0 0 300 200"/);
+  assert.match(renderSvg({ ...base, format: 'flag', flag: 'banner' } as any, { uid: 'f' }), /viewBox="0 0 230 230"/);
+  assert.match(renderSvg({ ...base, format: 'flag', flag: 'gonfalon' } as any, { uid: 'f' }), /viewBox="0 0 180 260"/);
+});
+
+test('shield format is unchanged (200x230) and needs no format field', () => {
+  const svg = renderSvg({ shield: 'heater', field: { mode: 'plain', tinctures: ['azure'] }, charges: [] } as any, { uid: 'f' });
+  assert.match(svg, /viewBox="0 0 200 230"/);
+  assert.ok(!/scale\(/.test(svg.split('charges')[0] ?? svg), 'no frame scale wrap for shields');
+});
+
+test('flag field+ordinary are scaled into the frame; charges render undistorted', () => {
+  const svg = renderSvg({ format: 'flag', flag: 'flag', shield: 'heater', field: { mode: 'plain', tinctures: ['azure'] }, ordinary: { type: 'fess', tincture: 'argent' }, charges: [{ charge: 'mullet', tincture: 'or', count: 1, arrangement: 'one' }] } as any, { uid: 'f' });
+  assert.match(svg, /transform="scale\(1\.5 /); // 300/200 width scale on the field group
+  assert.ok(svg.includes('clip-path'), 'flag clipped to its outline');
+});

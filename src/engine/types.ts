@@ -123,8 +123,19 @@ export interface ChargeGroup {
 export type BuiltinShield = 'heater' | 'french' | 'spanish' | 'lozenge' | 'round';
 export type ShieldShape = BuiltinShield | (string & {});
 
+/** Flag / banner outlines. */
+export type FlagShape =
+  | 'flag' | 'banner' | 'vertical'
+  | 'swallowtail' | 'double-swallowtail' | 'burgee'
+  | 'pennon' | 'tapered-pennon' | 'streamer'
+  | 'gonfalon' | 'gonfalon-fork' | 'pointed' | 'rounded' | 'ragged';
+
 export interface Spec {
+  /** Container format. Defaults to 'shield'. */
+  format?: 'shield' | 'flag';
   shield: ShieldShape;
+  /** Flag outline when format is 'flag'. */
+  flag?: FlagShape;
   field: Field;
   ordinary?: Ordinary;
   charges: ChargeGroup[];

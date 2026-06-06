@@ -1,6 +1,6 @@
 {
   "name": "heraldry-weaver",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Procedural and custom heraldry generation for Obsidian (engine + playground).",
   "private": true,
   "type": "module",

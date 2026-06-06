@@ -3,6 +3,18 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-06-06
+
+### Added
+
+- **Flags.** A **Format** toggle (Shield / Flag) renders the same arms on a flag
+  instead of a shield, with a full roster of shapes: **flag** (3:2), **square
+  banner**, **vertical banner**, **swallowtail**, **double swallowtail**,
+  **burgee**, **pennon**, **tapered pennon**, **streamer**, **gonfalon** (three
+  tails), **gonfalon swallowtail**, **pointed**, **rounded**, and **ragged**
+  banners. The field and ordinary scale into the flag outline (full-width fess,
+  corner-to-corner saltire); charges are placed undistorted. Shields unchanged.
+
 ## [1.3.0] - 2026-06-03
 
 ### Added
@@ -82,6 +94,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.4.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.0
 [1.3.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.3.0
 [1.2.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.2.0
 [1.1.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.1.0

@@ -17,6 +17,11 @@ Weaver panel**. The panel has two modes:
   editor — an ordinary, and **layered charge groups**: add several charges, each
   with its own tincture, count, arrangement, 3×3 position, scale, rotation, and
   horizontal/vertical mirroring. Live preview with a rule-of-tincture hint.
+- **Flags as well as shields.** A **Format** toggle renders the same arms on a
+  flag instead of a shield — square banner, 3:2 flag, swallowtail, triangular
+  pennon, or gonfalon. Ordinaries and divisions extend to the flag's edges
+  (a fess spans full width, a saltire runs corner to corner) while charges stay
+  undistorted.
 
 Shared actions: **Save** (to the in-plugin library), **Copy reference**,
 **Insert block**, **SVG**, **PNG**, **Copy config**, **Import config**.
