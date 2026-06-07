@@ -3,6 +3,19 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-06-07
+
+### Fixed
+
+- Plugin-review compliance. Declared `minAppVersion` 1.7.2 (matches the
+  `revealLeaf` Promise API in use) and replaced direct `style` assignments with
+  `setCssStyles`, clearing both reviewer errors. Also: `TextEncoder`-based
+  base64 instead of deprecated `escape`/`unescape`; `activeDocument` for
+  popout-window compatibility; command ids/names no longer repeat the plugin
+  id/name; fire-and-forget promises marked with `void`; and a few `any`-typed
+  accesses tightened. `versions.json` is no longer attached as a release asset
+  (Obsidian reads it from the repository).
+
 ## [1.4.0] - 2026-06-06
 
 ### Added
@@ -94,6 +107,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.4.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.1
 [1.4.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.0
 [1.3.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.3.0
 [1.2.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.2.0

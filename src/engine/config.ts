@@ -8,10 +8,15 @@ import type { Spec } from './types';
 const PREFIX = 'HF1:';
 
 function toB64(s: string): string {
-  return btoa(unescape(encodeURIComponent(s)));
+  const bytes = new TextEncoder().encode(s);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
 }
 function fromB64(s: string): string {
-  return decodeURIComponent(escape(atob(s)));
+  const bin = atob(s);
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 export function encodeSpec(spec: Spec): string {

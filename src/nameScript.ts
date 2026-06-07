@@ -15,9 +15,8 @@ export interface ScriptHost {
 }
 
 // The Function constructor for async functions (not exposed as a global).
-const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
-  ...args: string[]
-) => (...a: unknown[]) => Promise<unknown>;
+const AsyncFunction = (Object.getPrototypeOf(async () => {}) as { constructor: unknown })
+  .constructor as new (...args: string[]) => (...a: unknown[]) => Promise<unknown>;
 
 /** Resolve the connector plugin's api object, or undefined if unavailable. */
 export function connectorApi(host: ScriptHost | undefined, pluginId: string): unknown {

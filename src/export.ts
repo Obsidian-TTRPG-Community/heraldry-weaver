@@ -5,7 +5,7 @@ import { SHIELD_W, SHIELD_H } from './engine/shields';
 
 function downloadBlob(data: Blob, filename: string): void {
   const url = URL.createObjectURL(data);
-  const a = document.createElement('a');
+  const a = activeDocument.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
@@ -13,7 +13,10 @@ function downloadBlob(data: Blob, filename: string): void {
 }
 
 function svgToDataUri(svg: string): string {
-  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  const bytes = new TextEncoder().encode(svg);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return 'data:image/svg+xml;base64,' + btoa(bin);
 }
 
 export function downloadSvg(svg: string, filename: string): void {
@@ -26,7 +29,7 @@ export function exportPng(svg: string, width: number, filename: string): Promise
     img.onload = () => {
       const w = Math.max(1, Math.round(width));
       const h = Math.round((w * SHIELD_H) / SHIELD_W);
-      const canvas = document.createElement('canvas');
+      const canvas = activeDocument.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d');

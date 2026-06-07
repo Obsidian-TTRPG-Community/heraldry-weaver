@@ -1084,7 +1084,7 @@ class ArmsBrowserModal extends Modal {
     usageSel.title = 'Filter by whether the arms are referenced in the vault';
     usageSel.onchange = () => {
       this.usage = usageSel.value as 'all' | 'used' | 'unused';
-      if (this.usage !== 'all' && !this.usedNames) this.scanUsage();
+      if (this.usage !== 'all' && !this.usedNames) void this.scanUsage();
       else this.renderGrid();
     };
 

@@ -136,14 +136,14 @@ export default class HeraldryWeaverPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'open-heraldry-weaver',
-      name: 'Open Heraldry Weaver panel',
+      id: 'open-panel',
+      name: 'Open panel',
       callback: () => void this.activateView(),
     });
 
     this.addCommand({
-      id: 'insert-heraldry-block',
-      name: 'Insert heraldry block (from note title)',
+      id: 'insert-block',
+      name: 'Insert block from note title',
       editorCallback: (editor, ctx) => {
         const name = ctx.file?.basename ?? 'New arms';
         editor.replaceSelection('```heraldry\nname: ' + name + '\n```\n');
@@ -151,8 +151,8 @@ export default class HeraldryWeaverPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'insert-random-heraldry-block',
-      name: 'Insert random heraldry block',
+      id: 'insert-random-block',
+      name: 'Insert random block',
       editorCallback: (editor) => {
         const seed = Math.random().toString(36).slice(2, 9);
         editor.replaceSelection('```heraldry\nseed: ' + seed + '\n```\n');
@@ -160,7 +160,7 @@ export default class HeraldryWeaverPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'reload-custom-charges',
+      id: 'reload-custom-assets',
       name: 'Reload custom assets',
       callback: async () => {
         await this.loadCustomCharges();
@@ -184,7 +184,7 @@ export default class HeraldryWeaverPlugin extends Plugin {
         await leaf.setViewState({ type: VIEW_TYPE_HERALDRY, active: true });
       }
     }
-    if (leaf) workspace.revealLeaf(leaf);
+    if (leaf) void workspace.revealLeaf(leaf);
   }
 
   // --- persistence -----------------------------------------------------------
@@ -509,7 +509,7 @@ export default class HeraldryWeaverPlugin extends Plugin {
     if (!sourcePath) return undefined;
     const prop = this.settings.seedProperty?.trim();
     if (!prop) return undefined;
-    const fm = this.app.metadataCache.getCache(sourcePath)?.frontmatter;
+    const fm = this.app.metadataCache.getCache(sourcePath)?.frontmatter as Record<string, unknown> | undefined;
     const v = fm?.[prop];
     return v == null || v === '' ? undefined : String(v);
   }
@@ -603,7 +603,7 @@ export default class HeraldryWeaverPlugin extends Plugin {
         renderSvg(current, { uid: 'export', outline: this.settings.outline }),
         this.settings.pngSize,
         `${safeFilename(resolved.label)}.png`,
-      ).catch((e) => new Notice(`PNG export failed: ${e.message}`));
+      ).catch((e: unknown) => new Notice(`PNG export failed: ${e instanceof Error ? e.message : String(e)}`));
     };
   }
 
@@ -641,8 +641,7 @@ export default class HeraldryWeaverPlugin extends Plugin {
       const size = sizeToken?.trim();
       if (size) {
         const css = /^\d+(\.\d+)?$/.test(size) ? `${size}px` : size;
-        node.style.height = css;
-        node.style.width = 'auto';
+        node.setCssStyles({ height: css, width: 'auto' });
         span.addClass('hw-inline-sized');
       }
       span.appendChild(node);
