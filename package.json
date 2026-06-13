@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.1",
     "obsidian": "^1.13.0",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
