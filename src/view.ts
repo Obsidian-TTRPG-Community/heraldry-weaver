@@ -877,11 +877,14 @@ export class HeraldryWeaverView extends ItemView {
       await navigator.clipboard.writeText(`\`${this.plugin.settings.inlinePrefix}${this.label.trim()}\``);
       new Notice('Saved & copied inline reference.');
     };
-    actions.createEl('button', { text: 'Insert block' }).onclick = () => {
+    actions.createEl('button', { text: 'Insert block' }).onclick = async () => {
       const editor = this.activeEditor();
       if (!editor) { new Notice('Open a note in editing view (not reading mode) first.'); return; }
+      // Save first (when named) so the block resolves to exactly what the
+      // preview shows, including Build-mode edits and custom-asset rolls.
+      if (this.named() && !(await this.ensureSaved())) return;
       editor.replaceSelection(this.blockText());
-      new Notice('Inserted heraldry block.');
+      new Notice(this.named() ? 'Saved & inserted heraldry block.' : 'Inserted heraldry block.');
     };
     actions.createEl('button', { text: 'SVG' }).onclick = () =>
       downloadSvg(renderSvg(this.spec, { uid: 'export', outline: this.plugin.settings.outline }), `${safeFilename(this.label || 'arms')}.svg`);
@@ -995,8 +998,15 @@ export class HeraldryWeaverView extends ItemView {
 
   private blockText(): string {
     const lines = ['```heraldry'];
-    if (this.named()) lines.push(`name: ${this.label.trim()}`);
-    if (this.seed !== this.label.trim()) lines.push(`seed: ${this.seed}`);
+    if (this.named()) {
+      // Name only — never add the roll seed alongside it. An explicit `seed:`
+      // outranks the saved entry when a block resolves, so including it would
+      // regenerate the original roll (without custom-asset pools) and discard
+      // Build-mode edits — the block would show the wrong arms.
+      lines.push(`name: ${this.label.trim()}`);
+    } else {
+      lines.push(`seed: ${this.seed}`);
+    }
     if (this.plugin.settings.staticInserts) lines.push('controls: false');
     lines.push('```', '');
     return lines.join('\n');

@@ -204,7 +204,10 @@ export default class HeraldryWeaverPlugin extends Plugin {
     // which the library's "recent" view and browser rely on. Updating an
     // existing key in place would otherwise keep its original position.
     delete this.arms[name];
-    this.arms[name] = spec;
+    // Deep-copy: the panel keeps editing its live spec object, and storing it
+    // by reference would let later edits silently mutate the saved entry (so
+    // existing references/blocks would render the wrong arms).
+    this.arms[name] = JSON.parse(JSON.stringify(spec)) as Spec;
     await this.saveAll();
   }
 
