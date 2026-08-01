@@ -73,6 +73,10 @@ export type OrdinaryType = BuiltinOrdinary | (string & {});
 export interface Ordinary {
   type: OrdinaryType;
   tincture: Tincture;
+  /** Paint this ordinary with the field's tinctures swapped, so it reads as the
+   *  photographic negative of whatever it lies over. Requires a two-tincture
+   *  division/variation field; ignored otherwise (falls back to `tincture`). */
+  counterchanged?: boolean;
   /** For imported ordinaries: keep original colours / remap individual ones. */
   keepColour?: boolean;
   colourMap?: Record<string, string>;
@@ -98,6 +102,11 @@ export interface ChargeGroup {
   /** Charge id, e.g. 'mullet'. Resolves against the charge registry. */
   charge: string;
   tincture: Tincture;
+  /** Paint this group with the field's tinctures swapped, so each part of the
+   *  charge shows the opposite tincture of the field beneath it ("Per pale vert
+   *  and argent, a mullet counterchanged"). Requires a two-tincture
+   *  division/variation field; ignored otherwise (falls back to `tincture`). */
+  counterchanged?: boolean;
   count: number; // 1..3 in v0.1
   arrangement: Arrangement;
   /** Deprecated: vertical band. Mapped to Position when position is absent. */

@@ -3,6 +3,22 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-08-01
+
+### Added
+
+- **Counterchanged charges and ordinaries.** On a divided or varied field, a
+  charge or ordinary can be blazoned *counterchanged*: it takes the field's two
+  tinctures in reverse, so each part of it shows the opposite of the region it
+  lies on. Rendered by painting the swapped field through the element's own
+  silhouette, so it works uniformly across every division and variation, keeps
+  fur patterns aligned, and needs no per-division geometry. The **Build** panel
+  grows a *Counterchanged* toggle (shown only when the field has two distinct
+  region tinctures), the blazon reads "... counterchanged", and counterchanged
+  elements are exempt from the rule-of-tincture hint. Fields that cannot be
+  counterchanged — plain fields, imported field art, imported tiling variations
+  — ignore the flag and fall back to the element's own tincture.
+
 ## [1.4.1] - 2026-06-07
 
 ### Fixed
@@ -107,6 +123,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.5.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.0
 [1.4.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.1
 [1.4.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.0
 [1.3.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.3.0

@@ -2,6 +2,7 @@ import { labelOf } from './tinctures';
 import { getCharge } from './charges';
 import { getOrdinaryAsset, getFieldAsset, getVariationAsset } from './assets';
 import { positionOf } from './options';
+import { counterchangeable } from './counterchange';
 import type { Spec, Field, Ordinary, ChargeGroup, Position } from './types';
 
 const DIVISION_WORD: Record<string, string> = {
@@ -54,9 +55,9 @@ function fieldBlazon(field: Field): string {
   return labelOf(a);
 }
 
-function ordinaryBlazon(o: Ordinary): string {
+function ordinaryBlazon(o: Ordinary, cc: boolean): string {
   const name = ORDINARY_NAME[o.type] ?? getOrdinaryAsset(o.type)?.singular ?? o.type;
-  const tinc = o.keepColour ? 'proper' : labelOf(o.tincture);
+  const tinc = o.counterchanged && cc ? 'counterchanged' : o.keepColour ? 'proper' : labelOf(o.tincture);
   return `a ${name} ${tinc}`;
 }
 
@@ -79,15 +80,20 @@ function flipTerm(g: ChargeGroup): string {
   return '';
 }
 
-function chargeBlazon(g: ChargeGroup): string {
+function chargeBlazon(g: ChargeGroup, cc: boolean): string {
   const def = getCharge(g.charge);
   const singular = def ? def.singular : g.charge;
   const plural = def ? def.plural : `${g.charge}s`;
   const article = def ? def.article : 'a';
   const flip = flipTerm(g);
   const suffix = POSITION_SUFFIX[positionOf(g)] ?? '';
-  // A charge shown in its own (original) colours is blazoned "proper".
-  const tincture = g.keepColour ? 'proper' : labelOf(g.tincture);
+  // A charge shown in its own (original) colours is blazoned "proper"; one that
+  // takes the field's tinctures in reverse is blazoned "counterchanged".
+  const tincture = g.counterchanged && cc
+    ? 'counterchanged'
+    : g.keepColour
+      ? 'proper'
+      : labelOf(g.tincture);
   if (g.count === 1) {
     return `${article} ${singular} ${tincture}${flip}${suffix}`;
   }
@@ -96,8 +102,9 @@ function chargeBlazon(g: ChargeGroup): string {
 
 /** Render a spec as a formal blazon, e.g. "Azure, a bend Or". */
 export function toBlazon(spec: Spec): string {
+  const cc = counterchangeable(spec.field);
   const parts: string[] = [fieldBlazon(spec.field)];
-  if (spec.ordinary) parts.push(ordinaryBlazon(spec.ordinary));
-  for (const g of spec.charges) parts.push(chargeBlazon(g));
+  if (spec.ordinary) parts.push(ordinaryBlazon(spec.ordinary, cc));
+  for (const g of spec.charges) parts.push(chargeBlazon(g, cc));
   return parts.join(', ');
 }

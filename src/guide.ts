@@ -31,6 +31,19 @@ const divided = (division: Division, a: Tincture, b: Tincture): Spec => ({
   field: { mode: 'division', division, tinctures: [a, b] },
   charges: [],
 });
+/** A divided field with a single counterchanged charge (or bare ordinary). */
+const counterchanged = (
+  division: Division,
+  a: Tincture,
+  b: Tincture,
+  charge: string,
+  scale = 1.2,
+): Spec => ({
+  shield: 'heater',
+  field: { mode: 'division', division, tinctures: [a, b] },
+  charges: [{ charge, tincture: b, count: 1, arrangement: 'one', counterchanged: true, scale }],
+});
+
 const varied = (variation: Variation, a: Tincture, b: Tincture): Spec => ({
   shield: 'heater',
   field: { mode: 'variation', variation, tinctures: [a, b] },
@@ -110,6 +123,36 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       { name: 'Ermine', note: 'Black tails on white \u2014 the prized winter coat of the stoat, long a mark of high rank.', spec: plain('heater', 'ermine') },
       { name: 'Vair', note: 'Interlocking blue-and-white bells, representing squirrel pelts sewn back to back.', spec: plain('heater', 'vair') },
       { name: 'Potent', note: 'A variant of vair drawn with T-shaped "crutch" (potent) figures.', spec: plain('heater', 'potent') },
+    ],
+  },
+  {
+    title: 'Counterchanging',
+    intro:
+      'On a divided or varied field, a charge may be blazoned "counterchanged": it takes the '
+      + 'field\u2019s tinctures in reverse, so every part of it shows the opposite of whatever it '
+      + 'lies on. The device stays legible without ever repeating the colour beneath it, which is '
+      + 'why it sidesteps the rule of tincture entirely.',
+    entries: [
+      {
+        name: 'Per pale',
+        note: 'The classic case \u2014 the charge flips colour where it crosses the party line.',
+        spec: counterchanged('per-pale', 'vert', 'argent', 'mullet', 1.3),
+      },
+      {
+        name: 'Quarterly',
+        note: 'With four quarters a charge can change tincture more than once.',
+        spec: counterchanged('quarterly', 'azure', 'argent', 'heart', 1.4),
+      },
+      {
+        name: 'An ordinary counterchanged',
+        note: 'Ordinaries counterchange too: this fess reverses the field it crosses.',
+        spec: {
+          shield: 'heater',
+          field: { mode: 'division', division: 'per-pale', tinctures: ['vert', 'argent'] },
+          ordinary: { type: 'fess', tincture: 'argent', counterchanged: true },
+          charges: [],
+        },
+      },
     ],
   },
   {

@@ -1,7 +1,7 @@
 {
   "id": "heraldry-weaver",
   "name": "Heraldry Weaver",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "minAppVersion": "1.7.2",
   "description": "Procedural and custom heraldry for worldbuilders and TTRPGs. Generate, save, and embed coats of arms in codeblocks or inline in tables.",
   "author": "Obsidian TTRPG Community",

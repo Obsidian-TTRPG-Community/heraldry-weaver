@@ -17,6 +17,12 @@ Weaver panel**. The panel has two modes:
   editor — an ordinary, and **layered charge groups**: add several charges, each
   with its own tincture, count, arrangement, 3×3 position, scale, rotation, and
   horizontal/vertical mirroring. Live preview with a rule-of-tincture hint.
+- **Counterchanging.** On a divided or varied field, a **Counterchanged** toggle
+  appears on the ordinary and on each charge group. A counterchanged element
+  takes the field's tinctures in reverse, so every part of it shows the opposite
+  of whatever it lies on — "Per pale Vert and Argent, a mullet counterchanged".
+  It works across every division and variation, keeps fur patterns aligned, and
+  is exempt from the rule-of-tincture hint (it can never be colour-on-colour).
 - **Flags as well as shields.** A **Format** toggle renders the same arms on a
   flag instead of a shield — square banner, 3:2 flag, swallowtail, triangular
   pennon, or gonfalon. Ordinaries and divisions extend to the flag's edges

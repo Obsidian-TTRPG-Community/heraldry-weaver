@@ -10,6 +10,7 @@ import {
 import { hexOf, furInfo, parseCustomFur } from './tinctures';
 import type { FurInfo } from './tinctures';
 import { getCharge } from './charges';
+import { counterchangeable } from './counterchange';
 import { stripColours, applyColourMap } from './importCharge';
 import { positionOf } from './options';
 import type {
@@ -276,6 +277,35 @@ function variationRegions(field: Field, defs: Defs): string {
   return out;
 }
 
+// --- counterchanging ----------------------------------------------------------
+
+/** The field re-drawn with its two tinctures swapped. A counterchanged charge
+ *  or ordinary is exactly this composition seen through its own silhouette. */
+function swappedFieldMarkup(field: Field, defs: Defs): string {
+  const [a, b] = field.tinctures;
+  return fieldMarkup({ ...field, tinctures: [b, a] }, defs);
+}
+
+/** Flatten markup to a solid white silhouette, for use as mask content. Keeps
+ *  `fill="none"` (so stroked shapes like the annulet stay rings) and keeps
+ *  stroke-width, so the silhouette matches the drawn charge exactly. */
+function silhouette(inner: string): string {
+  return `<g fill="#fff" stroke="#fff">${stripColours(inner)}</g>`;
+}
+
+/** Register a luminance mask of `body` and return the markup that paints
+ *  `source` through it. */
+function throughMask(id: string, body: string, source: string, w: number, h: number, defs: Defs): string {
+  if (!defs.patterns.has(id)) {
+    defs.patterns.set(
+      id,
+      `<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${n(w)}" height="${n(h)}">` +
+        `<rect x="0" y="0" width="${n(w)}" height="${n(h)}" fill="#000"/>${body}</mask>`,
+    );
+  }
+  return `<g mask="url(#${id})">${source}</g>`;
+}
+
 function fieldMarkup(field: Field, defs: Defs): string {
   if (field.mode === 'plain') {
     return `<rect x="0" y="0" width="200" height="230" fill="${paint(field.tinctures[0], defs)}"/>`;
@@ -471,36 +501,63 @@ function flagChargePositions(count: number, arrangement: Arrangement, position: 
   ];
 }
 
-function chargeGroupMarkup(g: ChargeGroup, flag: FlagFrame | null): string {
-  const def = getCharge(g.charge);
-  if (!def) return '';
-  const fill = hexOf(g.tincture);
-  const inner = def.render(fill, { keepColour: g.keepColour, colourMap: g.colourMap });
+/** Placement transform for each instance in a charge group. Shared by the
+ *  normal draw and the counterchange mask so the two always coincide. */
+function chargeTransforms(g: ChargeGroup, flag: FlagFrame | null): string[] {
   const mult = g.scale && g.scale > 0 ? g.scale : 1;
   const positions = flag
     ? flagChargePositions(g.count, g.arrangement, positionOf(g), flag.w, flag.h)
     : chargePositions(g.count, g.arrangement, positionOf(g));
-  return positions
-    .slice(0, g.count)
-    .map((p) => {
-      const scale = (p.size * mult) / 100;
-      // Rotate each charge about its own centre (p.x, p.y), applied before the
-      // placement so the centre stays put regardless of mirroring.
-      const rot = g.rotate ? `rotate(${n(g.rotate)} ${n(p.x)} ${n(p.y)}) ` : '';
-      if (!g.flipX && !g.flipY) {
-        const tx = p.x - 50 * scale;
-        const ty = p.y - 50 * scale;
-        return `<g transform="${rot}translate(${n(tx)},${n(ty)}) scale(${n(scale)})">${inner}</g>`;
-      }
-      // Mirror about the charge centre by negating the axis scale and shifting
-      // the origin to the opposite edge, so the centre stays put.
-      const sx = (g.flipX ? -1 : 1) * scale;
-      const sy = (g.flipY ? -1 : 1) * scale;
-      const tx = p.x - 50 * sx;
-      const ty = p.y - 50 * sy;
-      return `<g transform="${rot}translate(${n(tx)},${n(ty)}) scale(${n(sx)},${n(sy)})">${inner}</g>`;
-    })
-    .join('');
+  return positions.slice(0, g.count).map((p) => {
+    const scale = (p.size * mult) / 100;
+    // Rotate each charge about its own centre (p.x, p.y), applied before the
+    // placement so the centre stays put regardless of mirroring.
+    const rot = g.rotate ? `rotate(${n(g.rotate)} ${n(p.x)} ${n(p.y)}) ` : '';
+    if (!g.flipX && !g.flipY) {
+      const tx = p.x - 50 * scale;
+      const ty = p.y - 50 * scale;
+      return `${rot}translate(${n(tx)},${n(ty)}) scale(${n(scale)})`;
+    }
+    // Mirror about the charge centre by negating the axis scale and shifting
+    // the origin to the opposite edge, so the centre stays put.
+    const sx = (g.flipX ? -1 : 1) * scale;
+    const sy = (g.flipY ? -1 : 1) * scale;
+    const tx = p.x - 50 * sx;
+    const ty = p.y - 50 * sy;
+    return `${rot}translate(${n(tx)},${n(ty)}) scale(${n(sx)},${n(sy)})`;
+  });
+}
+
+/** Everything a counterchanged element needs: the swapped-tincture field
+ *  composition, already placed in the same coordinate space as the charges. */
+interface CounterchangeCtx {
+  source: string;
+  w: number;
+  h: number;
+  defs: Defs;
+}
+
+function chargeGroupMarkup(
+  g: ChargeGroup,
+  flag: FlagFrame | null,
+  cc: CounterchangeCtx | null,
+  index: number,
+): string {
+  const def = getCharge(g.charge);
+  if (!def) return '';
+  const transforms = chargeTransforms(g, flag);
+  if (g.counterchanged && cc) {
+    // Paint the charge by showing the field's opposite through its silhouette,
+    // so every region boundary the charge crosses flips its colour — including
+    // fur patterns, which stay aligned because the mask leaves user space alone.
+    const sil = silhouette(def.render('#ffffff'));
+    const body = transforms.map((t) => `<g transform="${t}">${sil}</g>`).join('');
+    const id = `hw-cc-${cc.defs.uid}-c${index}`;
+    return throughMask(id, body, cc.source, cc.w, cc.h, cc.defs);
+  }
+  const fill = hexOf(g.tincture);
+  const inner = def.render(fill, { keepColour: g.keepColour, colourMap: g.colourMap });
+  return transforms.map((t) => `<g transform="${t}">${inner}</g>`).join('');
 }
 
 // --- top-level ----------------------------------------------------------------
@@ -551,18 +608,44 @@ export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
   }
   const defs: Defs = { uid: safe, patterns: new Map() };
 
-  const inner = fieldMarkup(spec.field, defs) +
-    (spec.ordinary ? ordinaryMarkup(spec.ordinary) : '');
+  // The counterchange source: the field with its two tinctures swapped, drawn
+  // in the same space the charges live in. Built once and reused by every
+  // counterchanged element, so a shield with several of them stays cheap.
+  const canCC = counterchangeable(spec.field);
+  const scaleToFrame = (m: string): string =>
+    frame ? `<g transform="scale(${n(W / SHIELD_W)} ${n(H / SHIELD_H)})">${m}</g>` : m;
+  const cc: CounterchangeCtx | null = canCC
+    ? { source: scaleToFrame(swappedFieldMarkup(spec.field, defs)), w: W, h: H, defs }
+    : null;
+
+  let ordinary = '';
+  if (spec.ordinary) {
+    if (spec.ordinary.counterchanged && cc) {
+      // Inside the clipped group the ordinary is still in 200x230 space, so mask
+      // and source are both built there and the frame scale applies to the pair.
+      const body = silhouette(ordinaryMarkup(spec.ordinary));
+      ordinary = throughMask(
+        `hw-cc-${defs.uid}-o`,
+        body,
+        swappedFieldMarkup(spec.field, defs),
+        SHIELD_W,
+        SHIELD_H,
+        defs,
+      );
+    } else {
+      ordinary = ordinaryMarkup(spec.ordinary);
+    }
+  }
+
+  const inner = fieldMarkup(spec.field, defs) + ordinary;
   // The field+ordinary are authored in 200x230 design space; for a flag we
   // scale that composition into the frame (full-width fess, corner-to-corner
   // saltire, etc.). Shields render it 1:1.
-  const clipped = frame
-    ? `<g transform="scale(${n(W / SHIELD_W)} ${n(H / SHIELD_H)})">${inner}</g>`
-    : inner;
+  const clipped = scaleToFrame(inner);
 
   // Charges are sized to sit inside the field, so they are not clipped (keeps
   // their outlines crisp at the edge) and are placed undistorted.
-  const charges = spec.charges.map((g) => chargeGroupMarkup(g, frame)).join('');
+  const charges = spec.charges.map((g, i) => chargeGroupMarkup(g, frame, cc, i)).join('');
 
   const patternDefs = [...defs.patterns.values()].join('');
 

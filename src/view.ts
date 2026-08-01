@@ -10,6 +10,7 @@ import {
   isCustomFur, listCustomFurs, makeCustomFur, parseCustomFur,
 } from './engine/tinctures';
 import { getCharge, chargeGroups, isImported, listImportedChargeIds } from './engine/charges';
+import { counterchangeable } from './engine/counterchange';
 import {
   shieldAssetGroups, getShieldAsset,
   ordinaryAssetGroups, getOrdinaryAsset, isImportedOrdinary,
@@ -236,16 +237,36 @@ export class HeraldryWeaverView extends ItemView {
     if (f.mode !== 'plain') return null;
     const prim = f.tinctures[0];
     if (tinctureClass(prim) === 'fur') return null; // furs are neutral
-    if (this.spec.ordinary && !contrasts(prim, this.spec.ordinary.tincture)) {
+    // A counterchanged element never breaks the rule: it *is* the field reversed.
+    if (this.spec.ordinary && !this.spec.ordinary.counterchanged
+      && !contrasts(prim, this.spec.ordinary.tincture)) {
       return 'Breaks the rule of tincture (like on like).';
     }
-    if (this.spec.charges.some((g) => !contrasts(prim, g.tincture))) {
+    if (this.spec.charges.some((g) => !g.counterchanged && !contrasts(prim, g.tincture))) {
       return 'Breaks the rule of tincture (like on like).';
     }
     return null;
   }
 
   // --- small UI builders -----------------------------------------------------
+
+  /** A single labelled on/off toggle row. */
+  private toggleRow(
+    parent: HTMLElement,
+    label: string,
+    text: string,
+    value: boolean,
+    title: string,
+    onChange: (v: boolean) => void,
+  ): void {
+    const row = parent.createDiv({ cls: 'hw-field' });
+    row.createSpan({ cls: 'hw-field-label', text: label });
+    const toggles = row.createDiv({ cls: 'hw-toggles' });
+    const b = toggles.createEl('button', { cls: 'hw-toggle', text });
+    b.title = title;
+    if (value) b.addClass('is-selected');
+    b.onclick = () => onChange(!value);
+  }
 
   private selectRow(
     parent: HTMLElement,
@@ -741,10 +762,20 @@ export class HeraldryWeaverView extends ItemView {
     if (this.spec.ordinary) {
       const o = this.spec.ordinary;
       const importedOrd = isImportedOrdinary(o.type);
-      if (!importedOrd || !o.keepColour) {
+      const canCC = counterchangeable(this.spec.field);
+      // A counterchanged ordinary takes its colours from the field, so its own
+      // tincture swatch has nothing to say while the toggle is on.
+      if ((!importedOrd || !o.keepColour) && !(canCC && o.counterchanged)) {
         this.swatchRow(
           panel, 'Ordinary tincture', o.tincture,
           (t) => { o.tincture = t; this.render(); },
+        );
+      }
+      if (canCC) {
+        this.toggleRow(
+          panel, 'Counterchanged', 'Counterchanged', !!o.counterchanged,
+          'Take the field\u2019s tinctures in reverse',
+          (v) => { o.counterchanged = v; this.render(); },
         );
       }
       if (importedOrd) {
@@ -781,13 +812,21 @@ export class HeraldryWeaverView extends ItemView {
       // The single-tincture swatch only applies when the charge is being
       // recoloured; for imported art kept in its own colours, the per-colour
       // palette (below) governs instead, so drop the redundant row.
-      if (!isImported(g.charge) || !g.keepColour) {
+      const canCC = counterchangeable(this.spec.field);
+      if ((!isImported(g.charge) || !g.keepColour) && !(canCC && g.counterchanged)) {
         this.swatchRow(
           card, 'Tincture', g.tincture,
           (t) => { g.tincture = t; this.render(); },
         );
       }
-      this.colourControls(card, g, i);
+      if (canCC) {
+        this.toggleRow(
+          card, 'Counterchanged', 'Counterchanged', !!g.counterchanged,
+          'Take the field\u2019s tinctures in reverse',
+          (v) => { g.counterchanged = v; this.render(); },
+        );
+      }
+      if (!(canCC && g.counterchanged)) this.colourControls(card, g, i);
       this.positionGrid(
         card, positionOf(g),
         (p) => { g.position = p; this.render(); },
