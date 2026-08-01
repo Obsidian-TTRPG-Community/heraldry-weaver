@@ -3,6 +3,16 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-08-01
+
+### Fixed
+
+- The **Counterchanged** toggle overflowed its button and overlapped the row
+  label (and the position grid beneath it). `hw-toggle` is a fixed 34x28 icon
+  button, so the word never fit; the toggle now shows a half-filled square
+  (U+25E7) — a literal picture of a per-pale counterchange — matching the
+  Mirror row's icon toggles. The row label still reads "Counterchanged".
+
 ## [1.5.0] - 2026-08-01
 
 ### Added
@@ -123,6 +133,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.5.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.1
 [1.5.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.0
 [1.4.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.1
 [1.4.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.0

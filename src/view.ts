@@ -250,7 +250,9 @@ export class HeraldryWeaverView extends ItemView {
 
   // --- small UI builders -----------------------------------------------------
 
-  /** A single labelled on/off toggle row. */
+  /** A single labelled on/off toggle row. `text` renders inside a fixed
+   *  34x28 `hw-toggle` button, so it must be a single glyph — a word overflows
+   *  the button and collides with the label. Use `hw-pill` for text toggles. */
   private toggleRow(
     parent: HTMLElement,
     label: string,
@@ -773,7 +775,7 @@ export class HeraldryWeaverView extends ItemView {
       }
       if (canCC) {
         this.toggleRow(
-          panel, 'Counterchanged', 'Counterchanged', !!o.counterchanged,
+          panel, 'Counterchanged', '\u25e7', !!o.counterchanged,
           'Take the field\u2019s tinctures in reverse',
           (v) => { o.counterchanged = v; this.render(); },
         );
@@ -821,7 +823,7 @@ export class HeraldryWeaverView extends ItemView {
       }
       if (canCC) {
         this.toggleRow(
-          card, 'Counterchanged', 'Counterchanged', !!g.counterchanged,
+          card, 'Counterchanged', '\u25e7', !!g.counterchanged,
           'Take the field\u2019s tinctures in reverse',
           (v) => { g.counterchanged = v; this.render(); },
         );
