@@ -1,4 +1,5 @@
 import type { ChargeDef } from './charges';
+import { svgBox } from './svgGeometry';
 
 // Convert an arbitrary SVG string into a ChargeDef that fits the canonical
 // 100x100 charge box. Pure and testable; the plugin layer reads files and feeds
@@ -8,18 +9,9 @@ function round(v: number): number {
   return Number(v.toFixed(3));
 }
 
-export function parseViewBox(svg: string): { w: number; h: number } {
-  const vb = svg.match(/viewBox\s*=\s*"([-\d.\s,]+)"/i);
-  if (vb) {
-    const p = vb[1].trim().split(/[\s,]+/).map(Number);
-    if (p.length === 4 && p[2] > 0 && p[3] > 0) return { w: p[2], h: p[3] };
-  }
-  const w = svg.match(/\bwidth\s*=\s*"([\d.]+)/i);
-  const h = svg.match(/\bheight\s*=\s*"([\d.]+)/i);
-  return {
-    w: w ? Number(w[1]) : 100,
-    h: h ? Number(h[1]) : 100,
-  };
+/** Root user-space box (viewBox, else width/height in px, else 100x100). */
+export function parseViewBox(svg: string): { x: number; y: number; w: number; h: number } {
+  return svgBox(svg);
 }
 
 export function innerOf(svg: string): string {
@@ -68,13 +60,14 @@ export function chargeFromSvg(
   svg: string,
   opts: ImportOptions = {},
 ): ChargeDef {
-  const { w, h } = parseViewBox(svg);
+  const { x, y, w, h } = parseViewBox(svg);
   const inner = innerOf(svg);
   const defaultRecolor = opts.recolor ?? true;
   const max = Math.max(w, h) || 100;
   const scale = 100 / max;
-  const tx = (100 - w * scale) / 2;
-  const ty = (100 - h * scale) / 2;
+  // Centre the viewBox in the 100x100 box, honouring a non-zero origin.
+  const tx = (100 - w * scale) / 2 - x * scale;
+  const ty = (100 - h * scale) / 2 - y * scale;
   const transform = `translate(${round(tx)},${round(ty)}) scale(${round(scale)})`;
   const label = opts.label ?? id;
 

@@ -3,6 +3,35 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.2] - 2026-10-10
+
+### Fixed
+
+- **Imported shields, ordinaries, fields and other custom art no longer land
+  offset or shrunken** ([#5](https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/issues/5)).
+  The importer read path coordinates as written and ignored the file's
+  transforms, so art saved by Inkscape — which puts a `translate` (and, for mm
+  pages, often a `scale`) on the layer group — was placed by its pre-transform
+  coordinates. A new geometry module parses the full path grammar (relative
+  commands, H/V, S/T shorthands, arcs) and applies every nested transform:
+  - **Shields** are flattened to one absolute outline and fitted by the
+    outline's own bounds, so page padding no longer shrinks them. Rects,
+    circles and ellipses now count as outlines (a roundel drawn as a circle
+    imports).
+  - **Ordinaries** are cropped to their true ink bounds; previously relative
+    path data produced a wrong crop box.
+  - **Charges, fields, variations and furs** honour a non-zero viewBox origin
+    instead of shifting the art by it.
+  - The viewBox is read in either quote style, and a file without one falls
+    back to its width/height converted to px (mm, cm, in, pt, pc).
+
+### Documentation
+
+- README: new *Preparing your artwork* section explaining the field box (160 ×
+  198, about 4 : 5) and how each asset folder is fitted to it — what the page
+  size means for charges, fields, variations and furs, and why it is ignored
+  for shields and ordinaries.
+
 ## [1.5.1] - 2026-08-01
 
 ### Fixed
@@ -133,6 +162,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.5.2]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.2
 [1.5.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.1
 [1.5.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.0
 [1.4.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.4.1

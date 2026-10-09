@@ -209,6 +209,37 @@ the settings button). Each file appears in the relevant picker by filename, and
 **nested folders** within any reserved subfolder become categories in that
 picker.
 
+### Preparing your artwork
+
+Any vector editor works (Inkscape, Illustrator, Affinity, or WMF from a clip
+art pack). Layer offsets, nested transforms, mm/pt/in page units and non-zero
+viewBox origins are all understood, so there is no need to flatten or
+re-origin a file before importing it.
+
+Every shield draws its field inside the same **field box**: 160 × 198 units, a
+portrait of roughly **4 : 5**. How a file is fitted to that box depends on its
+folder:
+
+| Folder | What decides the size | How it is fitted |
+|---|---|---|
+| `shields/` | the outline itself — page size is ignored | scaled to fit inside the field box, centred |
+| `ordinaries/` | the drawing itself — page size is ignored | scaled so its longer side spans the field width (160), centred; the size slider adjusts it |
+| `charges/` | the **page** (viewBox) | the page is centred in the charge's square slot, so padding on the page makes the charge smaller |
+| `fields/` | the **page** | scaled to **cover** the field box; whatever overhangs is cropped (a 4 : 5 page crops almost nothing) |
+| `variations/` | the **page** = exactly one tile | tiled at 40 units per tile width |
+| `furs/` | the **page** | scaled to cover the field box, like a field |
+
+Tips:
+
+- **Shields** — draw the escutcheon as one closed shape (a path, polygon,
+  rect, circle or ellipse). Every shape in the file counts toward the outline,
+  so remove guides and decorations; text and clones are ignored.
+- **Fields, variations, furs, charges** — the page is the frame. In Inkscape,
+  *Document Properties → Resize to content* (Shift+Ctrl+R) makes the page match
+  the drawing; in Illustrator use *Object → Artboards → Fit to Artwork Bounds*.
+- **Fields** that aren't 4 : 5 still work — the **size** and **X/Y offset**
+  sliders choose which part shows.
+
 ### Colours & rolls
 
 Imported **charges** and **ordinaries** are silhouette-recoloured to the chosen

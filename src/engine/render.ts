@@ -121,7 +121,7 @@ export function furSwatchSvg(t: Tincture): string {
       ? `<g fill="${hexOf(cf.target)}" stroke="${hexOf(cf.target)}">${stripColours(cf.def.inner)}</g>`
       : cf.def.inner;
     return (
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cf.def.w} ${cf.def.h}" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cf.def.x ?? 0} ${cf.def.y ?? 0} ${cf.def.w} ${cf.def.h}" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">` +
       `${body}</svg>`
     );
   }
@@ -165,12 +165,12 @@ function paint(t: Tincture, defs: Defs): string {
 
 /** A custom fur fills by COVER (these sheets are pre-tiled semés, so a single
  *  cover-fit tile over the whole canvas reads correctly; divisions show slices). */
-function customFurPattern(def: { inner: string; w: number; h: number }, target: Tincture | undefined, id: string): string {
+function customFurPattern(def: { inner: string; x?: number; y?: number; w: number; h: number }, target: Tincture | undefined, id: string): string {
   const box = {
     x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
     w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
   };
-  const t = fitTransform({ x: 0, y: 0, w: def.w, h: def.h }, box, 'cover');
+  const t = fitTransform({ x: def.x ?? 0, y: def.y ?? 0, w: def.w, h: def.h }, box, 'cover');
   const body = target
     ? `<g fill="${hexOf(target)}" stroke="${hexOf(target)}">${stripColours(def.inner)}</g>`
     : def.inner;
@@ -235,7 +235,7 @@ function variationRegions(field: Field, defs: Defs): string {
         defs.patterns.set(
           id,
           `<pattern id="${id}" patternUnits="userSpaceOnUse" x="${FIELD_BOUNDS.x0}" y="${FIELD_BOUNDS.y0}"` +
-            ` width="${n(tileW)}" height="${n(tileH)}"><g transform="scale(${n(s)})">${art.inner}</g></pattern>`,
+            ` width="${n(tileW)}" height="${n(tileH)}"><g transform="scale(${n(s)}) translate(${n(-(art.x ?? 0))} ${n(-(art.y ?? 0))})">${art.inner}</g></pattern>`,
         );
       }
       return `<rect x="0" y="0" width="200" height="230" fill="url(#${id})"/>`;
@@ -317,7 +317,7 @@ function fieldMarkup(field: Field, defs: Defs): string {
       x: FIELD_BOUNDS.x0, y: FIELD_BOUNDS.y0,
       w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
     };
-    const t = fitTransform({ x: 0, y: 0, w: art.w, h: art.h }, box, 'cover');
+    const t = fitTransform({ x: art.x ?? 0, y: art.y ?? 0, w: art.w, h: art.h }, box, 'cover');
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
     const k = field.scale && field.scale > 0 ? field.scale : 1;
@@ -596,7 +596,7 @@ export function renderSvg(spec: Spec, opts: RenderOptions = {}): string {
         w: FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0, h: FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0,
       };
       if (sh) {
-        const t = fitTransform({ x: 0, y: 0, w: sh.w, h: sh.h }, box, 'contain');
+        const t = fitTransform({ x: sh.x ?? 0, y: sh.y ?? 0, w: sh.w, h: sh.h }, box, 'contain');
         clipChild = `<path d="${sh.d}" transform="${t}"/>`;
         border = `<path d="${sh.d}" transform="${t}" fill="none" stroke="${outline}" stroke-width="2"/>`;
       } else {

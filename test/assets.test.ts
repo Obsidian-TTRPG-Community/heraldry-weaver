@@ -26,14 +26,74 @@ test('fitTransform contain centres and scales to the smaller axis', () => {
   assert.match(t, /translate\(20 35\)/); // y centred: 16 + (198-160)/2
 });
 
-test('shieldFromSvg extracts combined geometry; polygons convert to paths', () => {
+test('shieldFromSvg bakes geometry into one path and fits the outline, not the page', () => {
   const s = shieldFromSvg('s1', SHIELD_SVG, { label: 'Spade' });
   assert.ok(s);
   assert.match(s!.d, /M10 10 L90 10/);
-  assert.equal(s!.w, 100);
+  assert.deepEqual([s!.x, s!.y, s!.w, s!.h], [10, 10, 80, 100]); // ink box, padding ignored
   const p = shieldFromSvg('s2', POLY_SVG);
-  assert.ok(p && /M0,0 L50,0 L25,50 Z/.test(p.d));
-  assert.equal(shieldFromSvg('s3', '<svg viewBox="0 0 10 10"><circle r="3"/></svg>'), null); // no path/polygon
+  assert.ok(p && /M0 0 L50 0 L25 50 Z/.test(p.d));
+  // a roundel outline drawn as a circle is a valid shield now
+  const c = shieldFromSvg('s3', '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="3"/></svg>');
+  assert.ok(c);
+  assert.deepEqual([c!.x, c!.y, c!.w, c!.h].map((v) => Number(v!.toFixed(6))), [2, 2, 6, 6]);
+  assert.equal(shieldFromSvg('s4', '<svg viewBox="0 0 10 10"><text>hi</text></svg>'), null);
+});
+
+// Issue #5: Inkscape's "Resize page to drawing" leaves the outline under a
+// translated layer group; files saved in mm often add a scale as well.
+const INKSCAPE_SHIELD =
+  '<svg width="85mm" height="100mm" viewBox="0 0 85 100" xmlns="http://www.w3.org/2000/svg">' +
+  '<g inkscape:groupmode="layer" id="layer1" transform="translate(-41.2,-63.5)">' +
+  '<path d="m 41.2,63.5 h 85 v 50 q 0,40 -42.5,50 q -42.5,-10 -42.5,-50 z" style="fill:#e6e6e6;stroke:#000"/>' +
+  '</g></svg>';
+
+test('issue #5: Inkscape layer transform and relative path data land inside the page', () => {
+  const s = shieldFromSvg('ink', INKSCAPE_SHIELD)!;
+  assert.ok(s);
+  const box = [s.x!, s.y!, s.w, s.h].map((v) => Number(v.toFixed(3)) + 0);
+  assert.deepEqual(box, [0, 0, 85, 100]);
+  // scaled layer (px drawing inside an mm page) — same outline, same box
+  const scaled = INKSCAPE_SHIELD.replace('translate(-41.2,-63.5)', 'matrix(0.5,0,0,0.5,-20.6,-31.75)')
+    .replace('m 41.2,63.5 h 85 v 50 q 0,40 -42.5,50 q -42.5,-10 -42.5,-50 z', 'm 41.2,63.5 h 170 v 100 q 0,80 -85,100 q -85,-20 -85,-100 z');
+  const t = shieldFromSvg('ink2', scaled)!;
+  assert.deepEqual([t.x!, t.y!, t.w, t.h].map((v) => Number(v.toFixed(3)) + 0), [0, 0, 85, 100]);
+});
+
+test('issue #5: imported shield renders centred in the field box', () => {
+  clearShieldAssets();
+  registerShieldAsset(shieldFromSvg('ink', INKSCAPE_SHIELD)!);
+  const svg = renderSvg({ shield: 'ink', field: { mode: 'plain', tinctures: ['azure'] }, charges: [] }, { uid: 't' });
+  // contain-fit of 85x100 into 160x198 at (20,16): s = 160/85 = 1.882 (width-bound),
+  // so x starts at 20 and y is centred: 16 + (198 - 188.235) / 2 = 20.882
+  assert.match(svg, /transform="translate\(20 20\.882\) scale\(1\.882\)"/);
+  // ...applied to the outline at its real position (layer offset baked in)
+  assert.match(svg, /<path d="M0 0 L85 0 L85 50 C/);
+  clearShieldAssets();
+});
+
+test('issue #5: viewBox origin is honoured for fields, variations and charges', () => {
+  const f = fieldFromSvg('o', "<svg viewBox='10 20 100 120'><rect x='10' y='20' width='100' height='120'/></svg>");
+  assert.deepEqual([f.x, f.y, f.w, f.h], [10, 20, 100, 120]); // single quotes parse too
+  clearFieldAssets();
+  registerFieldAsset(f);
+  const svg = renderSvg({ shield: 'heater', field: { mode: 'image', tinctures: ['vert'], image: 'o' }, charges: [] } as any, { uid: 't' });
+  // cover-fit: s = max(160/100, 198/120) = 1.65; tx = 20 - 10*1.65 + (160-165)/2
+  assert.match(svg, /translate\(1 -17\) scale\(1\.65\)/);
+  clearFieldAssets();
+});
+
+test('viewBoxOf falls back to width/height with units', () => {
+  const b = viewBoxOf('<svg width="85mm" height="1in">');
+  assert.deepEqual([b.x, b.y, Number(b.w.toFixed(3)), b.h], [0, 0, 321.26, 96]);
+});
+
+test('issue #5: ordinary crop uses real ink bounds (relative paths, transforms)', () => {
+  // A pale drawn with relative commands under a translated layer on a big page.
+  const pale = '<svg viewBox="0 0 300 300"><g transform="translate(100,0)"><path d="m 30,40 h 20 v 100 h -20 z"/></g></svg>';
+  const cropped = cropToInk(pale);
+  assert.match(cropped, /viewBox="0 0 20 100"/);
+  assert.match(cropped, /translate\(-130 -40\)/);
 });
 
 test('render: imported shield drives clip + border with a fit transform', () => {

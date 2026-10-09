@@ -109,6 +109,9 @@ export interface CustomFur {
   label: string;
   category?: string;
   inner: string;
+  /** viewBox origin of the source sheet (default 0,0). */
+  x?: number;
+  y?: number;
   w: number;
   h: number;
   palette: string[];

@@ -7,13 +7,17 @@
 import type { ChargeDef } from './charges';
 import { chargeFromSvg, innerOf, extractPalette, type ImportOptions } from './importCharge';
 import type { CustomFur } from './tinctures';
+import { svgBox, flattenGeometry } from './svgGeometry';
 
 export interface ImportedShield {
   id: string;
   label: string;
   category?: string;
-  /** Combined outline geometry in the art's own (0,0-origin) coordinates. */
+  /** Combined outline geometry (transforms baked in) in the art's user space. */
   d: string;
+  /** The outline's own bounds in that space — the box the renderer fits. */
+  x?: number;
+  y?: number;
   w: number;
   h: number;
 }
@@ -22,8 +26,11 @@ export interface ImportedArt {
   id: string;
   label: string;
   category?: string;
-  /** Inner SVG markup in the art's own (0,0-origin) coordinates. */
+  /** Inner SVG markup in the art's own user space. */
   inner: string;
+  /** The art's viewBox (origin may be non-zero). */
+  x?: number;
+  y?: number;
   w: number;
   h: number;
   /** Distinct fill/stroke colours in the art, for the colour editor. */
@@ -32,14 +39,10 @@ export interface ImportedArt {
 
 // --- generic helpers ----------------------------------------------------------
 
-/** Full viewBox of an SVG string (origin + size); falls back to 0,0,100,100. */
+/** Root user-space box of an SVG string: viewBox (either quote style), else
+ *  width/height in px, else 0,0,100,100. */
 export function viewBoxOf(svg: string): { x: number; y: number; w: number; h: number } {
-  const vb = svg.match(/viewBox\s*=\s*"([-\d.\s,]+)"/i);
-  if (vb) {
-    const p = vb[1].trim().split(/[\s,]+/).map(Number);
-    if (p.length === 4 && p[2] > 0 && p[3] > 0) return { x: p[0], y: p[1], w: p[2], h: p[3] };
-  }
-  return { x: 0, y: 0, w: 100, h: 100 };
+  return svgBox(svg);
 }
 
 /** Transform fitting an art box into a target box, preserving aspect.
@@ -72,67 +75,11 @@ function groupBy<T extends { category?: string }>(
     .map((label) => ({ label, ids: byCat.get(label)! }));
 }
 
-/** Extract combined outline geometry (paths + polygons) as a single `d`. */
-function geometryD(inner: string): string {
-  const parts: string[] = [];
-  let m: RegExpExecArray | null;
-  const pathRe = /<path\b[^>]*\bd\s*=\s*"([^"]+)"/gi;
-  while ((m = pathRe.exec(inner))) parts.push(m[1].trim());
-  const polyRe = /<polygon\b[^>]*\bpoints\s*=\s*"([^"]+)"/gi;
-  while ((m = polyRe.exec(inner))) {
-    const pts = m[1].trim().split(/\s+/);
-    if (pts.length) parts.push('M' + pts.join(' L') + ' Z');
-  }
-  return parts.join(' ');
-}
-
-/** Tight bounding box of the actual drawn geometry (a superset for curves;
- *  exact for the straight-line art typical of ordinaries). Null if none. */
+/** Exact bounding box of the drawn geometry in the root user space — nested
+ *  transforms applied, relative path commands and arcs understood. Null if
+ *  there is no measurable geometry. */
 export function inkBounds(inner: string): { x: number; y: number; w: number; h: number } | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const ext = (x: number, y: number): void => {
-    if (!isFinite(x) || !isFinite(y)) return;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  };
-  const pairs = (s: string): void => {
-    const nums = s.match(/-?\d*\.?\d+(?:e-?\d+)?/gi)?.map(Number) ?? [];
-    for (let i = 0; i + 1 < nums.length; i += 2) ext(nums[i], nums[i + 1]);
-  };
-  const attr = (tag: string, k: string): number => {
-    const r = tag.match(new RegExp(`\\b${k}\\s*=\\s*"(-?[\\d.]+)`));
-    return r ? Number(r[1]) : NaN;
-  };
-  let m: RegExpExecArray | null;
-  const dRe = /<path\b[^>]*\bd\s*=\s*"([^"]+)"/gi;
-  while ((m = dRe.exec(inner))) pairs(m[1]);
-  const pRe = /<(?:polygon|polyline)\b[^>]*\bpoints\s*=\s*"([^"]+)"/gi;
-  while ((m = pRe.exec(inner))) pairs(m[1]);
-  const rRe = /<rect\b[^>]*>/gi;
-  while ((m = rRe.exec(inner))) {
-    const t = m[0], x = attr(t, 'x') || 0, y = attr(t, 'y') || 0, w = attr(t, 'width'), h = attr(t, 'height');
-    if (isFinite(w) && isFinite(h)) { ext(x, y); ext(x + w, y + h); }
-  }
-  const cRe = /<circle\b[^>]*>/gi;
-  while ((m = cRe.exec(inner))) {
-    const t = m[0], cx = attr(t, 'cx') || 0, cy = attr(t, 'cy') || 0, r = attr(t, 'r');
-    if (isFinite(r)) { ext(cx - r, cy - r); ext(cx + r, cy + r); }
-  }
-  const eRe = /<ellipse\b[^>]*>/gi;
-  while ((m = eRe.exec(inner))) {
-    const t = m[0], cx = attr(t, 'cx') || 0, cy = attr(t, 'cy') || 0, rx = attr(t, 'rx'), ry = attr(t, 'ry');
-    if (isFinite(rx) && isFinite(ry)) { ext(cx - rx, cy - ry); ext(cx + rx, cy + ry); }
-  }
-  const lRe = /<line\b[^>]*>/gi;
-  while ((m = lRe.exec(inner))) {
-    const t = m[0];
-    ext(attr(t, 'x1'), attr(t, 'y1'));
-    ext(attr(t, 'x2'), attr(t, 'y2'));
-  }
-  if (!isFinite(minX) || maxX <= minX || maxY <= minY) return null;
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  return flattenGeometry(inner).bounds;
 }
 
 /** Re-crop an SVG to its actual ink, at a (0,0) origin, so downstream fitters
@@ -169,10 +116,13 @@ export function getShieldAsset(id: string): ImportedShield | undefined { return 
 export function isImportedShield(id: string): boolean { return id in shields; }
 export function shieldAssetGroups(): { label: string; ids: string[] }[] { return groupBy(shields); }
 export function shieldFromSvg(id: string, svg: string, opts: { label?: string; category?: string } = {}): ImportedShield | null {
-  const d = geometryD(innerOf(svg));
-  if (!d) return null;
-  const vb = viewBoxOf(svg);
-  return { id, label: opts.label ?? id, category: opts.category, d, w: vb.w, h: vb.h };
+  // Bake every transform into one absolute outline and fit the outline's own
+  // bounds, so page padding, layer offsets and unit scaling in the source file
+  // cannot shift or shrink the shield.
+  const g = flattenGeometry(innerOf(svg));
+  if (!g.d || !g.bounds) return null;
+  const b = g.bounds;
+  return { id, label: opts.label ?? id, category: opts.category, d: g.d, x: b.x, y: b.y, w: b.w, h: b.h };
 }
 
 // --- fields (background art) --------------------------------------------------
@@ -186,7 +136,7 @@ export function fieldAssetGroups(): { label: string; ids: string[] }[] { return 
 export function fieldFromSvg(id: string, svg: string, opts: { label?: string; category?: string } = {}): ImportedArt {
   const vb = viewBoxOf(svg);
   const inner = innerOf(svg);
-  return { id, label: opts.label ?? id, category: opts.category, inner, w: vb.w, h: vb.h, palette: extractPalette(inner) };
+  return { id, label: opts.label ?? id, category: opts.category, inner, x: vb.x, y: vb.y, w: vb.w, h: vb.h, palette: extractPalette(inner) };
 }
 
 // --- variations (tiling patterns) --------------------------------------------
@@ -200,7 +150,7 @@ export function variationAssetGroups(): { label: string; ids: string[] }[] { ret
 export function variationFromSvg(id: string, svg: string, opts: { label?: string; category?: string } = {}): ImportedArt {
   const vb = viewBoxOf(svg);
   const inner = innerOf(svg);
-  return { id, label: opts.label ?? id, category: opts.category, inner, w: vb.w, h: vb.h, palette: extractPalette(inner) };
+  return { id, label: opts.label ?? id, category: opts.category, inner, x: vb.x, y: vb.y, w: vb.w, h: vb.h, palette: extractPalette(inner) };
 }
 
 /** Clear every imported non-charge asset (charges are cleared separately). */
@@ -223,5 +173,5 @@ export function listVariationAssetIds(): string[] { return Object.keys(variation
 export function furFromSvg(id: string, svg: string, opts: { label?: string; category?: string } = {}): CustomFur {
   const vb = viewBoxOf(svg);
   const inner = innerOf(svg);
-  return { id, label: opts.label ?? id, category: opts.category, inner, w: vb.w, h: vb.h, palette: extractPalette(inner) };
+  return { id, label: opts.label ?? id, category: opts.category, inner, x: vb.x, y: vb.y, w: vb.w, h: vb.h, palette: extractPalette(inner) };
 }
