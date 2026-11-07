@@ -3,7 +3,7 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.6.0] - 2026-11-07
 
 ### Added
 
@@ -191,6 +191,7 @@ are byte-for-byte identical to 1.1.0.
   library, block and inline embedding, SVG/PNG export, a public API, custom
   name sources, and a bundled fantasy charge pack.
 
+[1.6.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.6.0
 [1.5.2]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.2
 [1.5.1]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.1
 [1.5.0]: https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/releases/tag/1.5.0
