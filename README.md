@@ -19,7 +19,8 @@ Weaver panel**. The panel has two modes:
   offset**, rotation, and horizontal/vertical mirroring. Live preview with a
   rule-of-tincture hint.
 - **Custom colours.** Every tincture row ends in a colour-wheel swatch that
-  opens your system colour picker, for shades the seven tinctures don't cover.
+  opens your system colour picker, plus a hex box where you can type or paste
+  an exact code, for shades the seven tinctures don't cover.
   Colours you pick are kept as extra swatches for the rest of the session. A
   custom colour is blazoned by its hex (`#3A7BD5`) and, for the rule-of-tincture
   hint, counts as a metal if it is light and a colour if it is dark.

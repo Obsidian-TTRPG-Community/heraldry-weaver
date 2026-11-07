@@ -155,6 +155,14 @@ export function makeCustomColour(hex: string): Tincture {
   return hex.trim().toLowerCase() as Tincture;
 }
 
+/** Parse typed/pasted hex (`#3a7bd5`, `3A7BD5`, `#37d`) to a custom-colour
+ *  tincture, or null if it isn't a hex colour. */
+export function parseHexColour(input: string): Tincture | null {
+  let h = input.trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(h)) h = h.split('').map((c) => c + c).join('');
+  return /^[0-9a-f]{6}$/i.test(h) ? makeCustomColour(`#${h}`) : null;
+}
+
 /** WCAG relative luminance of a #rrggbb colour (0 = black, 1 = white). */
 function luminance(hex: string): number {
   const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)

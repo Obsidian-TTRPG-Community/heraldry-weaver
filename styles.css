@@ -416,6 +416,16 @@
   background: conic-gradient(#e33, #ec3, #3c3, #3cc, #33e, #c3c, #e33);
 }
 .hw-swatch-custom:hover { border-color: var(--interactive-accent); }
+/* Hex box beside the picker swatch: swatch height, room for "#RRGGBB". */
+.hw-hex-input {
+  width: 7.5em;
+  height: 22px;
+  padding: 0 5px;
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  box-sizing: border-box;
+}
+.hw-hex-input.is-invalid { border-color: var(--text-error); }
 .hw-swatch-custom input[type="color"] {
   position: absolute;
   inset: 0;

@@ -6,7 +6,7 @@ import { renderSvg } from '../src/engine/render';
 import { toBlazon } from '../src/engine/blazon';
 import { decodeSpec, encodeSpec } from '../src/engine/config';
 import {
-  hexOf, labelOf, tinctureClass, contrasts, isCustomColour, makeCustomColour,
+  hexOf, labelOf, tinctureClass, contrasts, isCustomColour, makeCustomColour, parseHexColour,
 } from '../src/engine/tinctures';
 import { registerOrdinaryAsset, clearOrdinaryAssets } from '../src/engine/assets';
 import type { Spec, ChargeGroup, Tincture } from '../src/engine/types';
@@ -136,4 +136,14 @@ test('custom colour: light reads as metal, dark as colour, for the rule of tinct
   }
   assert.equal(contrasts('#203060' as Tincture, 'or'), true);
   assert.equal(contrasts('#203060' as Tincture, 'azure'), false);
+});
+
+test('custom colour: hex box accepts #, bare and 3-digit forms, rejects the rest', () => {
+  assert.equal(parseHexColour('#3A7BD5'), '#3a7bd5');
+  assert.equal(parseHexColour('  3a7bd5 '), '#3a7bd5');
+  assert.equal(parseHexColour('#37d'), '#3377dd');
+  assert.equal(parseHexColour('f0a'), '#ff00aa');
+  for (const bad of ['', '#', '#3a7bd', '#3a7bd5ff', 'azure', '#ggg']) {
+    assert.equal(parseHexColour(bad), null, bad);
+  }
 });

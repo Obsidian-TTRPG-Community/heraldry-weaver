@@ -8,7 +8,7 @@ import {
   GENERATABLE, FIELD_TINCTURES, METALS, COLOURS, hexOf, labelOf, contrasts, tinctureClass,
   furInfo, makeFur, matchPreset, NAMED_FURS, FUR_PATTERNS, FUR_PRESETS,
   isCustomFur, listCustomFurs, makeCustomFur, parseCustomFur,
-  isCustomColour, makeCustomColour,
+  isCustomColour, makeCustomColour, parseHexColour,
 } from './engine/tinctures';
 import { getCharge, chargeGroups, isImported, listImportedChargeIds } from './engine/charges';
 import { counterchangeable } from './engine/counterchange';
@@ -582,6 +582,28 @@ export class HeraldryWeaverView extends ItemView {
     input.oninput = () => { set(makeCustomColour(input.value)); this.refreshPreview(); };
     input.onchange = () => {
       const t = makeCustomColour(input.value);
+      set(t);
+      this.rememberColour(t);
+      this.render();
+    };
+    // Hex box for typing or pasting an exact colour (the Windows picker only
+    // takes RGB). Previews as soon as the text is a valid hex; Enter or
+    // leaving the box commits it.
+    const hexBox = sw.createEl('input', {
+      cls: 'hw-hex-input',
+      attr: { type: 'text', placeholder: '#hex', spellcheck: 'false', maxlength: '7' },
+    });
+    hexBox.setAttr('aria-label', 'Custom colour hex code');
+    hexBox.value = cur ? labelOf(cur) : '';
+    hexBox.oninput = () => {
+      const t = parseHexColour(hexBox.value);
+      hexBox.toggleClass('is-invalid', !!hexBox.value.trim() && !t);
+      if (t) { set(t); this.refreshPreview(); }
+    };
+    hexBox.onkeydown = (e) => { if (e.key === 'Enter') hexBox.blur(); };
+    hexBox.onchange = () => {
+      const t = parseHexColour(hexBox.value);
+      if (!t) return;
       set(t);
       this.rememberColour(t);
       this.render();

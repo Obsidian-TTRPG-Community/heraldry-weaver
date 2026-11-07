@@ -19,8 +19,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 - **Custom colours** ([#6](https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/issues/6)).
   Every tincture row — field, ordinary, charge, image-field background and the
   per-colour *Map to* row — ends in a colour-wheel swatch that opens the system
-  colour picker, previewing live as you drag. Picked colours stay as swatches
-  for the session. A custom colour is stored as its `#rrggbb` in place of a
+  colour picker, previewing live as you drag, plus a **hex box** for typing or
+  pasting an exact code (`#3A7BD5`, `3a7bd5` or `#37d`; the Windows picker only
+  takes RGB). Picked colours stay as swatches for the session. A custom colour is stored as its `#rrggbb` in place of a
   tincture name, blazoned by its hex, and classed metal or colour by lightness
   for the rule-of-tincture hint. Random rolls still use only the heraldic
   tinctures.
