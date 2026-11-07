@@ -15,8 +15,14 @@ Weaver panel**. The panel has two modes:
   / round), field (plain / divided / variation) with metal, colour, and **fur**
   tinctures — the eight standard furs plus custom recoloured furs via the fur
   editor — an ordinary, and **layered charge groups**: add several charges, each
-  with its own tincture, count, arrangement, 3×3 position, scale, rotation, and
-  horizontal/vertical mirroring. Live preview with a rule-of-tincture hint.
+  with its own tincture, count, arrangement, 3×3 position, scale, **X/Y
+  offset**, rotation, and horizontal/vertical mirroring. Live preview with a
+  rule-of-tincture hint.
+- **Custom colours.** Every tincture row ends in a colour-wheel swatch that
+  opens your system colour picker, for shades the seven tinctures don't cover.
+  Colours you pick are kept as extra swatches for the rest of the session. A
+  custom colour is blazoned by its hex (`#3A7BD5`) and, for the rule-of-tincture
+  hint, counts as a metal if it is light and a colour if it is dark.
 - **Counterchanging.** On a divided or varied field, a **Counterchanged** toggle
   appears on the ordinary and on each charge group. A counterchanged element
   takes the field's tinctures in reverse, so every part of it shows the opposite
@@ -239,6 +245,9 @@ Tips:
   the drawing; in Illustrator use *Object → Artboards → Fit to Artwork Bounds*.
 - **Fields** that aren't 4 : 5 still work — the **size** and **X/Y offset**
   sliders choose which part shows.
+- **Charges** drawn off-centre on their page can be re-centred by eye with the
+  charge's **Offset X / Offset Y** sliders, and imported **ordinaries** have the
+  same pair — though fixing the page is the better cure if you reuse the art.
 
 ### Colours & rolls
 

@@ -15,7 +15,10 @@ export type NamedFur =
 /** A custom fur, encoded `fur:<pattern>:<base>:<figure>[:c]` (c = countered). */
 export type CustomFur = `fur:${string}`;
 export type Fur = NamedFur | CustomFur;
-export type Tincture = Metal | Colour | Fur;
+/** A free colour picked in the builder, stored as lower-case `#rrggbb`. Not a
+ *  heraldic tincture; blazoned as its hex and classed metal/colour by lightness. */
+export type CustomColour = `#${string}`;
+export type Tincture = Metal | Colour | Fur | CustomColour;
 
 export type TinctureClass = 'metal' | 'colour' | 'fur';
 
@@ -84,6 +87,8 @@ export interface Ordinary {
   scale?: number;
   /** For imported ordinaries: horizontal centre nudge, % of field width (default 0). */
   offsetX?: number;
+  /** For imported ordinaries: vertical centre nudge, % of field height (default 0). */
+  offsetY?: number;
 }
 
 export type Arrangement = 'one' | 'in-fess' | 'in-pale' | 'two-and-one';
@@ -121,6 +126,11 @@ export interface ChargeGroup {
   flipY?: boolean;
   /** Rotate each charge about its own centre, in degrees clockwise (default 0). */
   rotate?: number;
+  /** Nudge the whole group from its position anchor, % of the field box
+   *  width / height (flag width / height on flags). Positive is right / down.
+   *  Lets off-centre imported art be re-centred by eye. Default 0. */
+  offsetX?: number;
+  offsetY?: number;
   /** For imported charges that carry their own colours: render in those
    *  original colours ("proper") rather than recolouring to `tincture`. */
   keepColour?: boolean;

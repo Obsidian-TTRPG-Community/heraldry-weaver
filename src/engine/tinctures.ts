@@ -140,15 +140,45 @@ export function makeCustomFur(id: string, target?: Tincture): Tincture {
   return (target ? `cfur:${id}:${target}` : `cfur:${id}`) as Tincture;
 }
 
+// --- custom colours -----------------------------------------------------------
+// A free colour from the builder's picker, stored as the tincture itself
+// (`#rrggbb`). Lets users match art or house colours the seven tinctures miss.
+
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+export function isCustomColour(t: Tincture | string | undefined): t is `#${string}` {
+  return typeof t === 'string' && HEX_RE.test(t);
+}
+
+/** Normalise a picker value to a custom-colour tincture (lower-case #rrggbb). */
+export function makeCustomColour(hex: string): Tincture {
+  return hex.trim().toLowerCase() as Tincture;
+}
+
+/** WCAG relative luminance of a #rrggbb colour (0 = black, 1 = white). */
+function luminance(hex: string): number {
+  const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+/** Lightness split for custom colours: Or (~0.44) and Argent read as metals,
+ *  the five colours (all below ~0.16) as colours. 0.3 sits between the groups. */
+const METAL_LUMINANCE = 0.3;
+
 export function tinctureClass(t: Tincture): TinctureClass {
   if ((METALS as readonly string[]).includes(t)) return 'metal';
   if ((COLOURS as readonly string[]).includes(t)) return 'colour';
+  // Custom colours follow the rule of tincture by lightness, so the hint and
+  // the default contrasting charge colour still behave sensibly.
+  if (isCustomColour(t)) return luminance(t) >= METAL_LUMINANCE ? 'metal' : 'colour';
   return 'fur';
 }
 
 export function hexOf(t: Tincture): string {
   const solid = (SOLID_HEX as Record<string, string>)[t];
   if (solid) return solid;
+  if (isCustomColour(t)) return t.toLowerCase();
   const f = furInfo(t);
   if (f) return SOLID_HEX[f.base] ?? '#888888';
   const cf = parseCustomFur(t);
@@ -159,6 +189,7 @@ export function hexOf(t: Tincture): string {
 export function labelOf(t: Tincture): string {
   const solid = (SOLID_LABEL as Record<string, string>)[t];
   if (solid) return solid;
+  if (isCustomColour(t)) return t.toUpperCase();
   if ((NAMED_FUR_LABEL as Record<string, string>)[t]) return (NAMED_FUR_LABEL as Record<string, string>)[t];
   const f = furInfo(t);
   if (f) {

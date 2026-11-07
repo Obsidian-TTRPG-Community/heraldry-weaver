@@ -388,7 +388,8 @@ function ordinaryMarkup(o: Ordinary): string {
       const cy = box.y + box.h / 2;
       const grow = k === 1 ? '' : `translate(${n(cx)} ${n(cy)}) scale(${n(k)}) translate(${n(-cx)} ${n(-cy)}) `;
       const dx = o.offsetX ? (o.offsetX / 100) * box.w : 0;
-      const shift = dx ? `translate(${n(dx)} 0) ` : '';
+      const dy = o.offsetY ? (o.offsetY / 100) * box.h : 0;
+      const shift = dx || dy ? `translate(${n(dx)} ${n(dy)}) ` : '';
       const body = def.render(f, { keepColour: o.keepColour, colourMap: o.colourMap });
       return `<g transform="${shift}${grow}${fit}">${body}</g>`;
     }
@@ -508,7 +509,14 @@ function chargeTransforms(g: ChargeGroup, flag: FlagFrame | null): string[] {
   const positions = flag
     ? flagChargePositions(g.count, g.arrangement, positionOf(g), flag.w, flag.h)
     : chargePositions(g.count, g.arrangement, positionOf(g));
-  return positions.slice(0, g.count).map((p) => {
+  // Free nudge of the whole group from its anchor, as % of the field box (or
+  // the flag) — the same units the image-field offsets use.
+  const spanW = flag ? flag.w : FIELD_BOUNDS.x1 - FIELD_BOUNDS.x0;
+  const spanH = flag ? flag.h : FIELD_BOUNDS.y1 - FIELD_BOUNDS.y0;
+  const dx = g.offsetX ? (g.offsetX / 100) * spanW : 0;
+  const dy = g.offsetY ? (g.offsetY / 100) * spanH : 0;
+  return positions.slice(0, g.count).map((anchor) => {
+    const p = dx || dy ? { ...anchor, x: anchor.x + dx, y: anchor.y + dy } : anchor;
     const scale = (p.size * mult) / 100;
     // Rotate each charge about its own centre (p.x, p.y), applied before the
     // placement so the centre stays put regardless of mirroring.

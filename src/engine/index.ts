@@ -14,6 +14,8 @@ export {
   hexOf,
   labelOf,
   contrasts,
+  isCustomColour,
+  makeCustomColour,
 } from './tinctures';
 export { RNG } from './rng';
 export { CHARGES, CHARGE_IDS, getCharge, registerCharge, registerBundledCharge, clearImportedCharges, clearBundledCharges, isImported, listChargeIds } from './charges';

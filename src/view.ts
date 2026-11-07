@@ -8,6 +8,7 @@ import {
   GENERATABLE, FIELD_TINCTURES, METALS, COLOURS, hexOf, labelOf, contrasts, tinctureClass,
   furInfo, makeFur, matchPreset, NAMED_FURS, FUR_PATTERNS, FUR_PRESETS,
   isCustomFur, listCustomFurs, makeCustomFur, parseCustomFur,
+  isCustomColour, makeCustomColour,
 } from './engine/tinctures';
 import { getCharge, chargeGroups, isImported, listImportedChargeIds } from './engine/charges';
 import { counterchangeable } from './engine/counterchange';
@@ -64,6 +65,9 @@ export class HeraldryWeaverView extends ItemView {
   /** Custom/variant furs created via the fur editor this session, kept so they
    * stay available as swatches even after selecting another tincture. */
   private customFurs: Tincture[] = [];
+  /** Custom colours picked this session (newest last), offered as swatches on
+   *  every tincture row so a house colour is one click away after first use. */
+  private customColours: Tincture[] = [];
   private previewShield?: HTMLElement;
   private previewBlazon?: HTMLElement;
   private previewName?: HTMLElement;
@@ -384,6 +388,10 @@ export class HeraldryWeaverView extends ItemView {
           this.render();
         };
       }
+      const mapped = target.colourMap?.[key];
+      this.customColourSwatches(opts, mapped, (t) => {
+        target.colourMap = { ...(target.colourMap ?? {}), [key]: hexOf(t) };
+      });
     }
   }
 
@@ -482,6 +490,7 @@ export class HeraldryWeaverView extends ItemView {
       b.appendChild(new DOMParser().parseFromString(furSwatchSvg(fur), 'image/svg+xml').documentElement);
       b.onclick = () => { this.spec.field.tinctures[idx] = fur; this.render(); };
     }
+    this.customColourSwatches(sw, cur, (t) => { this.spec.field.tinctures[idx] = t; });
     const more = sw.createEl('button', { cls: 'hw-swatch hw-swatch-more', text: '\u2026' });
     more.title = 'Fur variants & custom';
     more.setAttr('aria-label', 'Fur variants and custom');
@@ -511,6 +520,7 @@ export class HeraldryWeaverView extends ItemView {
       if (field.bg === t) b.addClass('is-selected');
       b.onclick = () => { field.bg = t; mark(b); this.render(); };
     }
+    this.customColourSwatches(sw, field.bg, (t) => { field.bg = t; });
   }
 
   private openGuide(): void {
@@ -534,6 +544,53 @@ export class HeraldryWeaverView extends ItemView {
     if ((furInfo(t) || isCustomFur(t)) && !FIELD_TINCTURES.includes(t) && !this.customFurs.includes(t)) {
       this.customFurs.push(t);
     }
+  }
+
+  /** Remember a picked custom colour for the session's swatch rows. */
+  private rememberColour(t: Tincture): void {
+    if (!isCustomColour(t)) return;
+    const hex = makeCustomColour(t);
+    this.customColours = [...this.customColours.filter((c) => c !== hex), hex].slice(-8);
+  }
+
+  /**
+   * Append the custom-colour swatches to a swatch row: one per colour picked
+   * this session, then a picker swatch that opens the system colour dialog.
+   * `set` only mutates the target — the picker previews live while dragging
+   * (no rebuild, so the dialog stays attached) and rebuilds once on commit.
+   */
+  private customColourSwatches(
+    sw: HTMLElement,
+    current: string | undefined,
+    set: (t: Tincture) => void,
+  ): void {
+    const cur = isCustomColour(current) ? makeCustomColour(current) : undefined;
+    if (cur) this.rememberColour(cur);
+    for (const hex of this.customColours) {
+      const b = sw.createEl('button', { cls: 'hw-swatch' });
+      b.style.background = hex;
+      b.title = `Custom ${labelOf(hex)}`;
+      b.setAttr('aria-label', `Custom colour ${labelOf(hex)}`);
+      if (hex === cur) b.addClass('is-selected');
+      b.onclick = () => { set(hex); this.render(); };
+    }
+    const pick = sw.createEl('label', { cls: 'hw-swatch hw-swatch-custom' });
+    pick.title = 'Custom colour…';
+    pick.setAttr('aria-label', 'Pick a custom colour');
+    const input = pick.createEl('input', { attr: { type: 'color' } });
+    input.value = cur ?? '#808080';
+    input.oninput = () => { set(makeCustomColour(input.value)); this.refreshPreview(); };
+    input.onchange = () => {
+      const t = makeCustomColour(input.value);
+      set(t);
+      this.rememberColour(t);
+      this.render();
+    };
+  }
+
+  /** Signed-percent readout for the offset sliders. */
+  private static pct(v: number): string {
+    return v === 0 ? '0%' : `${v > 0 ? '+' : ''}${v}%`;
   }
 
   private sliderRow(
@@ -709,7 +766,7 @@ export class HeraldryWeaverView extends ItemView {
         (v) => { this.spec.field.image = v; delete this.spec.field.colourMap; this.colourEdit = null; this.render(); },
       );
       this.sliderRow(
-        panel, 'Image size', f.scale ?? 1, 0.5, 2.5, 0.05,
+        panel, 'Image size', f.scale ?? 1, 0.25, 3, 0.05,
         (v) => `${v.toFixed(2)}\u00d7`,
         (v) => { this.spec.field.scale = v; this.refreshPreview(); },
       );
@@ -768,10 +825,11 @@ export class HeraldryWeaverView extends ItemView {
       // A counterchanged ordinary takes its colours from the field, so its own
       // tincture swatch has nothing to say while the toggle is on.
       if ((!importedOrd || !o.keepColour) && !(canCC && o.counterchanged)) {
-        this.swatchRow(
+        const osw = this.swatchRow(
           panel, 'Ordinary tincture', o.tincture,
           (t) => { o.tincture = t; this.render(); },
         );
+        this.customColourSwatches(osw, o.tincture, (t) => { o.tincture = t; });
       }
       if (canCC) {
         this.toggleRow(
@@ -783,14 +841,19 @@ export class HeraldryWeaverView extends ItemView {
       if (importedOrd) {
         this.colourEditor(panel, o, getOrdinaryAsset(o.type)?.palette ?? [], 'ord');
         this.sliderRow(
-          panel, 'Ordinary size', o.scale ?? 1, 0.3, 2.5, 0.05,
+          panel, 'Ordinary size', o.scale ?? 1, 0.2, 3, 0.05,
           (v) => `${v.toFixed(2)}\u00d7`,
           (v) => { o.scale = v; this.refreshPreview(); },
         );
         this.sliderRow(
-          panel, 'Centre offset', o.offsetX ?? 0, -50, 50, 1,
-          (v) => (v === 0 ? 'centre' : `${v > 0 ? '+' : ''}${v}%`),
+          panel, 'Offset X', o.offsetX ?? 0, -50, 50, 1,
+          (v) => (v === 0 ? 'centre' : HeraldryWeaverView.pct(v)),
           (v) => { o.offsetX = v; this.refreshPreview(); },
+        );
+        this.sliderRow(
+          panel, 'Offset Y', o.offsetY ?? 0, -50, 50, 1,
+          (v) => (v === 0 ? 'centre' : HeraldryWeaverView.pct(v)),
+          (v) => { o.offsetY = v; this.refreshPreview(); },
         );
       }
     }
@@ -816,10 +879,11 @@ export class HeraldryWeaverView extends ItemView {
       // palette (below) governs instead, so drop the redundant row.
       const canCC = counterchangeable(this.spec.field);
       if ((!isImported(g.charge) || !g.keepColour) && !(canCC && g.counterchanged)) {
-        this.swatchRow(
+        const csw = this.swatchRow(
           card, 'Tincture', g.tincture,
           (t) => { g.tincture = t; this.render(); },
         );
+        this.customColourSwatches(csw, g.tincture, (t) => { g.tincture = t; });
       }
       if (canCC) {
         this.toggleRow(
@@ -849,9 +913,21 @@ export class HeraldryWeaverView extends ItemView {
         );
       }
       this.sliderRow(
-        card, 'Size', g.scale ?? 1, 0.3, 1.8, 0.05,
+        card, 'Size', g.scale ?? 1, 0.2, 3, 0.05,
         (v) => `${Math.round(v * 100)}%`,
         (v) => { g.scale = v; this.refreshPreview(); },
+      );
+      // Free nudge from the position anchor, for art that isn't drawn centred
+      // in its own page (or just to place a charge by eye).
+      this.sliderRow(
+        card, 'Offset X', g.offsetX ?? 0, -50, 50, 1,
+        HeraldryWeaverView.pct,
+        (v) => { g.offsetX = v; this.refreshPreview(); },
+      );
+      this.sliderRow(
+        card, 'Offset Y', g.offsetY ?? 0, -50, 50, 1,
+        HeraldryWeaverView.pct,
+        (v) => { g.offsetY = v; this.refreshPreview(); },
       );
 
       this.sliderRow(

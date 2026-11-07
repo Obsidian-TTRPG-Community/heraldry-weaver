@@ -406,6 +406,28 @@
 }
 .hw-swatch-more:hover { border-color: var(--interactive-accent); color: var(--text-normal); }
 
+/* Custom-colour picker swatch: a colour wheel over an invisible native
+   <input type="color"> that fills it, so a click anywhere opens the dialog. */
+.hw-swatch-custom {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: conic-gradient(#e33, #ec3, #3c3, #3cc, #33e, #c3c, #e33);
+}
+.hw-swatch-custom:hover { border-color: var(--interactive-accent); }
+.hw-swatch-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .hw-fur-modal { width: min(560px, 92vw); }
 .hw-fur-section {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;

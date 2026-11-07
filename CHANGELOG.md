@@ -3,6 +3,34 @@
 All notable changes to Heraldry Weaver are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Offset sliders for charges, and a vertical offset for imported
+  ordinaries** ([#6](https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/issues/6)).
+  Each charge card gains **Offset X / Offset Y**, nudging the whole group from
+  its position anchor by up to half the field box either way — so imported art
+  that isn't drawn centred on its page can be lined up by eye. Imported
+  ordinaries' *Centre offset* becomes **Offset X** and gains **Offset Y**.
+  Offsets work on flags (as a share of the flag) and with counterchanging (the
+  mask moves with the charge). Stored as `offsetX` / `offsetY` on the charge
+  group; zero renders exactly as before.
+- **Custom colours** ([#6](https://github.com/Obsidian-TTRPG-Community/heraldry-weaver/issues/6)).
+  Every tincture row — field, ordinary, charge, image-field background and the
+  per-colour *Map to* row — ends in a colour-wheel swatch that opens the system
+  colour picker, previewing live as you drag. Picked colours stay as swatches
+  for the session. A custom colour is stored as its `#rrggbb` in place of a
+  tincture name, blazoned by its hex, and classed metal or colour by lightness
+  for the rule-of-tincture hint. Random rolls still use only the heraldic
+  tinctures.
+
+### Changed
+
+- The builder's size ranges are no longer held to the random generator's
+  limits: charge size now runs 20–300% (was 30–180%), image-field size
+  0.25–3× (was 0.5–2.5×) and imported-ordinary size 0.2–3× (was 0.3–2.5×).
+
 ## [1.5.2] - 2026-10-10
 
 ### Fixed
